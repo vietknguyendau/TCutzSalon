@@ -39,6 +39,11 @@ export interface SalonSettings {
   manageLinkTtlDays: number;
   cancellationPolicyEn?: string;
   cancellationPolicyVi?: string;
+  /** Local "HH:mm" window when no automated texts go out (wraps midnight). */
+  quietHours: { start: string; end: string };
+  missedCallTextBack: { enabled: boolean; dedupeHours: number; upcomingWindowDays: number };
+  /** Short public booking URL used in texts (e.g. https://book.tcutz-salon.com). Falls back to app URL + /book/slug. */
+  publicBookingUrl?: string;
 }
 
 export interface Salon {
@@ -52,6 +57,8 @@ export interface Salon {
   isDemo: boolean;
   brand: { primary: string; accent: string; background: string };
   ownerFirstName?: string;
+  /** Twilio (or other provider) number calls are forwarded to and texts are sent from. */
+  providerNumber?: string;
   settings: SalonSettings;
 }
 
@@ -179,6 +186,60 @@ export interface Appointment {
   isDemo: boolean;
   createdAt: string;
   canceledAt?: string;
+  /** Marketing attribution, e.g. "missed_call_text". */
+  attribution?: string;
+}
+
+export type CallOutcome = "missed" | "voicemail" | "abandoned" | "info" | "booked" | "rescheduled" | "canceled" | "transferred" | "callback" | "failed";
+
+export interface CallLog {
+  id: string;
+  salonId: string;
+  provider: string;
+  externalCallId: string;
+  fromE164?: string;
+  language?: Lang;
+  startedAt?: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  outcome?: CallOutcome;
+  appointmentId?: string;
+  createdAt: string;
+}
+
+export interface CallbackRequest {
+  id: string;
+  salonId: string;
+  customerId?: string;
+  phoneE164: string;
+  name?: string;
+  reason: "landline_missed_call" | "customer_asked" | "sms_reply" | "ai_escalation";
+  message?: string;
+  language?: Lang;
+  status: "open" | "done" | "dismissed";
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export type NotificationStatus = "queued" | "sent" | "delivered" | "failed" | "suppressed" | "test_mode";
+export interface NotificationRecord {
+  id: string;
+  salonId: string;
+  customerId?: string;
+  appointmentId?: string;
+  channel: "sms";
+  category: "transactional" | "marketing" | "verification";
+  template: string;
+  toAddress: string;
+  body: string;
+  status: NotificationStatus;
+  provider?: string;
+  providerMessageId?: string;
+  scheduledFor: string;
+  sentAt?: string;
+  error?: string;
+  segments?: number;
+  createdAt: string;
 }
 
 /** Statuses that occupy the stylist's time. Mirrors the DB exclusion constraint predicate. */

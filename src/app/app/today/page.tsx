@@ -8,6 +8,8 @@ import { AppointmentCard, type CardData } from "@/components/app/appointment-car
 import { QuickBookButtons, type Prefill } from "@/components/app/quick-book";
 import { Card } from "@/components/ui/primitives";
 import { formatDateLong } from "@/lib/i18n/dict";
+import { CallbackList } from "@/components/app/callback-list";
+import { timeAgo } from "@/lib/time-ago";
 
 export const metadata = { title: "Today" };
 
@@ -40,7 +42,10 @@ export default async function TodayPage(props: PageProps<"/app/today">) {
   const ctx = await getStaffContext();
   const sp = await props.searchParams;
   const today = todayLocal(ctx);
-  const { appointments, staff, services } = await loadRange(ctx, today, 1);
+  const [{ appointments, staff, services }, callbacks] = await Promise.all([
+    loadRange(ctx, today, 1),
+    ctx.store.listCallbacks(ctx.salon.id, "open"),
+  ]);
   const stats = dayStats(appointments);
   const now = new Date();
   const cards = appointments.map((e) => toCard(e, ctx.salon.timezone, now));
@@ -67,6 +72,10 @@ export default async function TodayPage(props: PageProps<"/app/today">) {
         </div>
         <QuickBookButtons services={serviceOptions(services)} staff={staffOptions(staff)} today={today} timezone={ctx.salon.timezone} prefill={prefill} />
       </header>
+
+      <CallbackList
+        items={callbacks.map((c) => ({ id: c.id, name: c.name, phone: c.phoneE164, reason: c.reason, message: c.message, language: c.language, ago: timeAgo(c.createdAt) }))}
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<CalendarCheck />} label="Appointments" value={String(stats.count)} sub={`${stats.remaining} still to come`} />

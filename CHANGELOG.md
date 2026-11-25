@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0 — 2026-11-24 — Phase 2a: missed-call text-back
+
+### Added
+- Missed calls forwarded to the salon's Twilio number get one text with the booking link (EN/VI), with rules for STOP opt-out, landlines (→ call-back list), 12-hour dedupe, existing appointments (reminder instead of link), AI-booked calls (skipped), and quiet hours (held until 9 AM, DST-aware).
+- Twilio provider over REST (send, Lookup v2 line type), webhook signature verification, endpoints for incoming call (bilingual greeting, "press 2 for Vietnamese"), call ended, inbound SMS (STOP/START/HELP/CALL/GỌI/free text), and delivery receipts. Cron dispatcher for held texts.
+- Today screen: **Call back** list (landline missed calls, CALL replies, customer texts) with Call / Done / Dismiss.
+- "Phone & texts" page: on/off status, missed calls, texts sent, recent calls and texts, and a **simulator** for the demo salon.
+- Analytics: missed calls, texts sent, and bookings attributed to the text (`?r=m` → `appointments.attribution`).
+- Migration 0005: `sms_opt_outs` (by phone, server-write only), salon provider number, text-back settings, call outcomes, call-back reasons, attribution.
+- Docs: `docs/TWILIO_SETUP.md` (10DLC, number config, conditional call forwarding, test plan).
+- Tests: +40 unit/integration (rules, quiet hours, pipeline, signed webhook routes), DB assertions for opt-out isolation and webhook idempotency, +8 e2e runs.
+
+### Fixed during verification
+- Dedupe compared different clocks (record creation vs. send time); now uses the scheduled send time.
+- Migration conflicted with the existing `callback_requests.reason` column; now tightens it in place.
+
 ## 0.1.0 — 2026-11-24 — Phase 1 core MVP (first slice)
 
 ### Added

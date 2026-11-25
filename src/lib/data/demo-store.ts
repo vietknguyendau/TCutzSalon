@@ -2,7 +2,7 @@
 // State lives in one server process (resets on redeploy/cold start) — fine for demos, never for real bookings.
 
 import { randomUUID } from "node:crypto";
-import type { Appointment, Customer, HaircutHistoryEntry, HaircutProfile, Salon, Service, Staff } from "../domain/types";
+import type { Appointment, CallLog, CallbackRequest, Customer, HaircutHistoryEntry, HaircutProfile, NotificationRecord, Salon, Service, Staff } from "../domain/types";
 import { isActiveStatus } from "../domain/types";
 import { canTransition } from "../domain/status";
 import { checkSlot, type BusyBlock } from "../scheduling/engine";
@@ -28,6 +28,11 @@ interface DemoState {
   history: HaircutHistoryEntry[];
   appointments: Appointment[];
   verifications: VerificationRecord[];
+  notifications: NotificationRecord[];
+  calls: CallLog[];
+  callbacks: CallbackRequest[];
+  optOuts: Map<string, boolean>; // `${salonId}|${phone}`
+  webhookEvents: Set<string>;
 }
 
 function buildState(now = new Date()): DemoState {
@@ -63,7 +68,24 @@ function buildState(now = new Date()): DemoState {
       createdAt: addMinutes(start, -60 * 24 * 3).toISOString(),
     };
   });
+  // A little realistic Phase-2 history for today: one missed call that got a text, one landline call-back.
+  const at = (hhmm: string) => localToUtc(today, hhmmToMinutes(hhmm), tz).toISOString();
+  const calls: CallLog[] = [
+    { id: randomUUID(), salonId: tcutzSalon.id, provider: "demo", externalCallId: "demo-call-1", fromE164: "+17635550166", language: "en", startedAt: at("10:12"), endedAt: at("10:12"), durationSeconds: 18, outcome: "missed", createdAt: at("10:12") },
+    { id: randomUUID(), salonId: tcutzSalon.id, provider: "demo", externalCallId: "demo-call-2", fromE164: "+17635550102", language: "en", startedAt: at("11:05"), endedAt: at("11:06"), durationSeconds: 22, outcome: "missed", createdAt: at("11:05") },
+  ];
+  const notifications: NotificationRecord[] = [
+    { id: randomUUID(), salonId: tcutzSalon.id, channel: "sms", category: "transactional", template: "missed_call_text_back", toAddress: "+17635550166", body: "Tcutz: Sorry we missed your call! Book here: https://book.tcutz-salon.com/?r=m or reply CALL for a call back. Reply STOP to opt out.", status: "test_mode", provider: "console", scheduledFor: at("10:12"), sentAt: at("10:12"), segments: 1, createdAt: at("10:12") },
+  ];
+  const callbacks: CallbackRequest[] = [
+    { id: randomUUID(), salonId: tcutzSalon.id, customerId: fid(4, 3), phoneE164: "+17635550102", name: "Robert Anderson", reason: "landline_missed_call", language: "en", status: "open", createdAt: at("11:06") },
+  ];
   return {
+    notifications,
+    calls,
+    callbacks,
+    optOuts: new Map(),
+    webhookEvents: new Set(),
     salons: [tcutzSalon],
     services: structuredClone(tcutzServices),
     staff: structuredClone(tcutzStaff),
@@ -75,15 +97,16 @@ function buildState(now = new Date()): DemoState {
   };
 }
 
-const g = globalThis as unknown as { __demoState?: { state: DemoState; day: string } };
+const g = globalThis as unknown as { __demoState?: { state: DemoState; day: string; pinned: boolean } };
 function state(): DemoState {
   const day = localDateOf(new Date(), tcutzSalon.timezone);
-  // Rebuild each new local day so "today" always has sample appointments.
-  if (!g.__demoState || g.__demoState.day !== day) g.__demoState = { state: buildState(), day };
+  // Rebuild each new local day so "today" always has sample appointments (unless a test pinned the date).
+  if (!g.__demoState || (!g.__demoState.pinned && g.__demoState.day !== day)) g.__demoState = { state: buildState(), day, pinned: false };
   return g.__demoState.state;
 }
+/** Tests: pass `now` to pin the demo calendar to that date. */
 export function resetDemoState(now?: Date) {
-  g.__demoState = { state: buildState(now), day: localDateOf(now ?? new Date(), tcutzSalon.timezone) };
+  g.__demoState = { state: buildState(now), day: localDateOf(now ?? new Date(), tcutzSalon.timezone), pinned: !!now };
 }
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -185,6 +208,7 @@ export class DemoStore implements DataStore {
       customerNote: input.customerNote,
       isDemo: true,
       createdAt: new Date().toISOString(),
+      attribution: input.attribution,
     };
     s.appointments.push(appt);
     return { ok: true, value: { appointment: clone(appt), created: true } };
@@ -317,6 +341,87 @@ export class DemoStore implements DataStore {
     const id = randomUUID();
     entry.photos = entry.photos.filter((p) => p.angle !== angle).concat({ id, angle, url });
     return { ok: true, value: { id } };
+  }
+
+  async findSalonByProviderNumber(e164: string) {
+    return clone(state().salons.find((x) => x.providerNumber === e164) ?? null);
+  }
+  async recordWebhookEvent(provider: string, externalId: string) {
+    const k = `${provider}|${externalId}`;
+    const s = state();
+    if (s.webhookEvents.has(k)) return false;
+    s.webhookEvents.add(k);
+    return true;
+  }
+  async isOptedOut(salonId: string, phone: string) {
+    return state().optOuts.get(`${salonId}|${phone}`) === true;
+  }
+  async setOptOut(salonId: string, phone: string, optedOut: boolean) {
+    state().optOuts.set(`${salonId}|${phone}`, optedOut);
+  }
+  async lastNotificationAt(salonId: string, to: string, templates: string[]) {
+    const hit = state()
+      .notifications.filter((n) => n.salonId === salonId && n.toAddress === to && templates.includes(n.template) && n.status !== "failed" && n.status !== "suppressed")
+      .sort((a, b) => b.scheduledFor.localeCompare(a.scheduledFor))[0];
+    return hit ? new Date(hit.scheduledFor) : null;
+  }
+  async createNotification(n: Omit<NotificationRecord, "id" | "createdAt">) {
+    const rec = { ...n, id: randomUUID(), createdAt: new Date().toISOString() };
+    state().notifications.push(rec);
+    return clone(rec);
+  }
+  async updateNotification(id: string, patch: Partial<NotificationRecord>) {
+    const n = state().notifications.find((x) => x.id === id);
+    if (n) Object.assign(n, patch);
+  }
+  async markNotificationByProviderId(providerMessageId: string, status: "delivered" | "failed", error?: string) {
+    const n = state().notifications.find((x) => x.providerMessageId === providerMessageId);
+    if (n) Object.assign(n, { status, error });
+  }
+  async listDueNotifications(now: Date, limit: number) {
+    return clone(state().notifications.filter((n) => n.status === "queued" && new Date(n.scheduledFor) <= now).slice(0, limit));
+  }
+  async listNotifications(salonId: string, limit: number) {
+    return clone(state().notifications.filter((n) => n.salonId === salonId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit));
+  }
+  async upsertCall(c: Omit<CallLog, "id" | "createdAt">) {
+    const s = state();
+    const existing = s.calls.find((x) => x.provider === c.provider && x.externalCallId === c.externalCallId);
+    if (existing) {
+      for (const [k, v] of Object.entries(c)) if (v !== undefined) (existing as unknown as Record<string, unknown>)[k] = v;
+      return clone(existing);
+    }
+    const rec: CallLog = { ...c, id: randomUUID(), createdAt: new Date().toISOString() };
+    s.calls.push(rec);
+    return clone(rec);
+  }
+  async getCall(provider: string, externalCallId: string) {
+    return clone(state().calls.find((x) => x.provider === provider && x.externalCallId === externalCallId) ?? null);
+  }
+  async listCalls(salonId: string, since: Date) {
+    return clone(state().calls.filter((c) => c.salonId === salonId && new Date(c.createdAt) >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  }
+  async createCallback(c: Omit<CallbackRequest, "id" | "createdAt" | "status">) {
+    const s = state();
+    const open = s.callbacks.find((x) => x.salonId === c.salonId && x.phoneE164 === c.phoneE164 && x.status === "open");
+    if (open) {
+      if (c.message) open.message = open.message ? `${open.message}\n${c.message}` : c.message;
+      if (c.reason === "customer_asked") open.reason = c.reason;
+      return clone(open);
+    }
+    const rec: CallbackRequest = { ...c, id: randomUUID(), status: "open", createdAt: new Date().toISOString() };
+    s.callbacks.push(rec);
+    return clone(rec);
+  }
+  async listCallbacks(salonId: string, status: CallbackRequest["status"]) {
+    return clone(state().callbacks.filter((c) => c.salonId === salonId && c.status === status).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  }
+  async resolveCallback(salonId: string, id: string, status: "done" | "dismissed") {
+    const c = state().callbacks.find((x) => x.salonId === salonId && x.id === id);
+    if (c) {
+      c.status = status;
+      c.resolvedAt = new Date().toISOString();
+    }
   }
 
   async saveVerification(rec: Omit<VerificationRecord, "id" | "attempts">) {

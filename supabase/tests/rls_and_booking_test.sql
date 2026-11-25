@@ -15,6 +15,14 @@ insert into salon_memberships (salon_id, user_id, role) values
   ('99999999-0000-4000-8000-000000000009', 'bbbbbbbb-0000-4000-8000-000000000002', 'owner');
 insert into platform_admins (user_id) values ('cccccccc-0000-4000-8000-000000000003');
 
+insert into sms_opt_outs (salon_id, phone_e164, opted_out, source) values
+  ('00000000-0000-4000-8001-000000000001', '+17635550177', true, 'sms_keyword'),
+  ('99999999-0000-4000-8000-000000000009', '+17635550188', true, 'sms_keyword');
+insert into callback_requests (salon_id, phone_e164, reason) values
+  ('99999999-0000-4000-8000-000000000009', '+17635550188', 'landline_missed_call');
+insert into ai_call_logs (salon_id, provider, external_call_id, from_e164, outcome)
+  values ('00000000-0000-4000-8001-000000000001', 'twilio', 'CA-test-1', '+17635550177', 'missed');
+
 -- ---------- Tenant isolation ----------
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', true);
@@ -23,6 +31,17 @@ do $$ begin
   if exists (select 1 from customers where first_name = 'Secret') then raise exception 'LEAK: saw other salon customer'; end if;
   if (select count(*) from salons) <> 1 then raise exception 'LEAK: saw other salon row'; end if;
   if (select count(*) from appointments) = 0 then raise exception 'Owner should see own appointments'; end if;
+  if (select count(*) from sms_opt_outs) <> 1 then raise exception 'opt-outs: expected only own salon row'; end if;
+  if exists (select 1 from callback_requests where phone_e164 = '+17635550188') then raise exception 'LEAK: other salon callbacks'; end if;
+  if (select count(*) from ai_call_logs) <> 1 then raise exception 'call logs: expected own call'; end if;
+end $$;
+
+-- Clients can't write opt-outs (server-only, so STOP can't be undone by a dashboard bug).
+do $$ begin
+  begin
+    insert into sms_opt_outs (salon_id, phone_e164, opted_out, source) values ('00000000-0000-4000-8001-000000000001', '+17635550199', false, 'staff');
+    raise exception 'client insert into sms_opt_outs should fail';
+  exception when insufficient_privilege then null; end;
 end $$;
 
 -- Cannot write into another tenant.
@@ -149,6 +168,20 @@ begin
   perform public.book_appointment('00000000-0000-4000-8001-000000000001', '00000000-0000-4000-8002-000000000001', null,
     v_start, array['00000000-0000-4000-8003-000000000001']::uuid[], 'website', 'test-hold-002', null, v_token);
   if exists (select 1 from appointment_holds where hold_token = v_token) then raise exception 'hold not released'; end if;
+end $$;
+
+-- ---------- Phase 2 constraints ----------
+do $$ begin
+  begin
+    insert into ai_call_logs (salon_id, provider, external_call_id, outcome) values ('00000000-0000-4000-8001-000000000001', 'twilio', 'CA-bad', 'nonsense');
+    raise exception 'bad outcome accepted';
+  exception when check_violation then null; end;
+  begin
+    insert into webhook_events (provider, external_id, payload) values ('twilio', 'call-ended:CA-dup', '{}');
+    insert into webhook_events (provider, external_id, payload) values ('twilio', 'call-ended:CA-dup', '{}');
+    raise exception 'duplicate webhook accepted';
+  exception when unique_violation then null; end;
+  if (select provider_number_e164 from salons where slug = 'tcutz') <> '+17635550100' then raise exception 'seed provider number missing'; end if;
 end $$;
 
 -- ---------- Anonymize ----------

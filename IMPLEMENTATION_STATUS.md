@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated 2026-11-24. Legend: ✅ working and tested · 🟡 partial (see note) · ⛔ not started.
+Updated 2026-11-24 (v0.2.0). Legend: ✅ working and tested · 🟡 partial (see note) · ⛔ not started.
 "Tested" means automated tests exist and pass in this repo — not that it has run in Diem's salon.
 
 ## Phase 1 — Core MVP
@@ -30,8 +30,25 @@ Updated 2026-11-24. Legend: ✅ working and tested · 🟡 partial (see note) ·
 | Vercel deployment | ⛔ | Instructions in `docs/DEPLOYMENT.md`; not deployed (needs your accounts). |
 | PWA | 🟡 | Manifest + icon; no offline service worker. |
 
-## Phase 2+ (not started)
-SMS (Twilio, 10DLC), AI receptionist (Retell/Vapi evaluation → tools → simulator → forwarding), waitlist UI, retention automations, baseline analytics, platform admin dashboard, Stripe. Tables exist for all of these.
+## Phase 2a — Missed-call text-back
+
+| Area | Status | Notes |
+|---|---|---|
+| Decision rules (opt-out, landline, dedupe, upcoming appt, quiet hours, language) | ✅ | 25 unit tests incl. DST. |
+| Pipeline: call ended → text / hold / call-back | ✅ | Integration tests on demo store, incl. duplicate webhooks and STOP-before-dispatch. |
+| Inbound SMS (STOP/START/HELP/CALL/GỌI/free text) | ✅ | Auto-reply max once/hour per number. |
+| Twilio webhooks + signature verification | ✅ | Tested with signed requests against the route handlers. |
+| Twilio REST send + line lookup | 🟡 | Written to Twilio's API; **not exercised against live Twilio** (no account/network here). |
+| Bilingual voice greeting | 🟡 | TwiML generated; Vietnamese voice quality must be checked on a real call. |
+| Held-text dispatcher (cron) | 🟡 | Works; Vercel Hobby = daily run (9:05 AM CST), Pro for finer schedule. |
+| Call-back list on Today | ✅ | |
+| Simulator (demo salon only) | ✅ | |
+| Attribution + analytics | ✅ | |
+| A2P 10DLC registration, number purchase, carrier forwarding | ⛔ | Needs your Twilio account + Diem's carrier. See `docs/TWILIO_SETUP.md`. |
+| Appointment confirmation/reminder texts via Twilio | 🟡 | Confirmation uses the provider layer; 24h/2h reminders not scheduled yet. |
+
+## Phase 2b+ (not started)
+AI receptionist (Retell/Vapi evaluation → tools → hand-off from the greeting), reminders, waitlist UI, retention automations, baseline analytics, platform admin dashboard, Stripe. Tables exist for these.
 
 ## Known decisions needing the owner
 See discovery questions in `docs/ARCHITECTURE.md §10` — especially durations, staff, and whether Wix Bookings is active on `/book-online`.

@@ -2,6 +2,7 @@ import { getStaffContext } from "@/lib/auth";
 import { dayStats, loadRange, todayLocal } from "@/lib/dashboard";
 import { addDays } from "@/lib/scheduling/time";
 import { formatMoney } from "@/lib/money";
+import { daysAgo } from "@/lib/time-ago";
 import { Card, SOURCE_LABEL } from "@/components/ui/primitives";
 import { RoiCalculator } from "@/components/app/roi-calculator";
 import type { AppointmentSource } from "@/lib/domain/types";
@@ -19,6 +20,13 @@ export default async function AnalyticsPage() {
   const fresh = new Set(appointments.filter((e) => !e.isReturning && e.customer).map((e) => e.customer?.id)).size;
   const avg = completed.length ? Math.round(s.completedCents / completed.length) : 0;
   const total = Object.values(s.bySource).reduce((a, b) => a + b, 0) || 1;
+  const [calls, texts] = await Promise.all([
+    ctx.store.listCalls(ctx.salon.id, daysAgo(7)),
+    ctx.store.listNotifications(ctx.salon.id, 500),
+  ]);
+  const missedCalls = calls.filter((c) => c.outcome === "missed" || c.outcome === "abandoned").length;
+  const textBacks = texts.filter((t) => t.template.startsWith("missed_call") && !["queued", "failed", "suppressed"].includes(t.status)).length;
+  const recovered = appointments.filter((e) => e.appt.attribution === "missed_call_text" && e.appt.status !== "canceled");
 
   return (
     <div>
@@ -32,7 +40,14 @@ export default async function AnalyticsPage() {
         <Metric label="Returning customers" value={String(returning)} />
         <Metric label="New customers" value={String(fresh)} />
         <Metric label="Revenue from AI-booked (completed)" value={formatMoney(aiCompleted.reduce((a, e) => a + (e.appt.finalPriceCents ?? 0), 0))} sub="Associated, not necessarily incremental" />
-        <Metric label="AI call minutes · SMS" value="— · —" sub="Phase 2 (call + SMS logging)" />
+        <Metric label="Missed calls" value={String(missedCalls)} />
+        <Metric label="Missed-call texts sent" value={String(textBacks)} />
+        <Metric
+          label="Booked from a missed-call text"
+          value={String(recovered.length)}
+          sub={`${formatMoney(recovered.reduce((a, e) => a + (e.appt.finalPriceCents ?? e.appt.estimatedPriceCents), 0))} · closest to truly new business`}
+        />
+        <Metric label="AI call minutes" value="—" sub="Starts with the AI receptionist" />
       </div>
 
       <Card className="mb-8 p-5">

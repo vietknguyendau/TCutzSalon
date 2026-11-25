@@ -26,8 +26,8 @@ const out: string[] = [
 ];
 const s = tcutzSalon;
 out.push(
-  `insert into salons (id, slug, name, timezone, phone_e164, address, website_url, brand, is_demo, status) values (${q(s.id)}, ${q(s.slug)}, ${q(s.name)}, ${q(s.timezone)}, ${q(s.phone)}, ${q(s.address)}, ${q(s.websiteUrl)}, ${q(JSON.stringify(s.brand))}::jsonb, true, 'trial');`,
-  `insert into salon_settings (salon_id, slot_interval_minutes, min_booking_notice_minutes, max_advance_days, hold_minutes, business_hours) values (${q(s.id)}, ${s.settings.slotIntervalMinutes}, ${s.settings.minBookingNoticeMinutes}, ${s.settings.maxAdvanceDays}, ${s.settings.holdMinutes}, ${q(JSON.stringify(s.settings.businessHours))}::jsonb);`,
+  `insert into salons (id, slug, name, timezone, phone_e164, address, website_url, brand, is_demo, status, provider_number_e164) values (${q(s.id)}, ${q(s.slug)}, ${q(s.name)}, ${q(s.timezone)}, ${q(s.phone)}, ${q(s.address)}, ${q(s.websiteUrl)}, ${q(JSON.stringify(s.brand))}::jsonb, true, 'trial', ${q(s.providerNumber)});`,
+  `insert into salon_settings (salon_id, slot_interval_minutes, min_booking_notice_minutes, max_advance_days, hold_minutes, business_hours, quiet_hours, missed_call_settings) values (${q(s.id)}, ${s.settings.slotIntervalMinutes}, ${s.settings.minBookingNoticeMinutes}, ${s.settings.maxAdvanceDays}, ${s.settings.holdMinutes}, ${q(JSON.stringify(s.settings.businessHours))}::jsonb, ${q(JSON.stringify(s.settings.quietHours))}::jsonb, ${q(JSON.stringify({ enabled: s.settings.missedCallTextBack.enabled, dedupe_hours: s.settings.missedCallTextBack.dedupeHours, upcoming_window_days: s.settings.missedCallTextBack.upcomingWindowDays }))}::jsonb);`,
   `insert into subscription_plans (code, name, monthly_price_cents, included_ai_minutes, included_sms) values ('pilot', 'Pilot', 14900, 600, 1000) on conflict (code) do nothing;`,
 );
 for (const sv of tcutzServices) {

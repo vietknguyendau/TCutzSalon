@@ -45,5 +45,6 @@ export default async function BookPage(props: PageProps<"/book/[slug]">) {
       .map((s) => ({ id: s.id, name: s.displayName, serviceIds: s.services.map((l) => l.serviceId) })),
   };
   const lang = sp.lang === "vi" || sp.lang === "en" ? sp.lang : undefined;
-  return <BookingFlow salon={pub} initialLang={lang} />;
+  const ref = sp.r === "m" ? "m" : undefined;
+  return <BookingFlow salon={pub} initialLang={lang} bookingRef={ref} />;
 }

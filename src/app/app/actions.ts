@@ -6,6 +6,7 @@ import { availableSlots, changeStatus } from "@/lib/booking/service";
 import { checkSlot } from "@/lib/scheduling/engine";
 import { haircutProfileBody, localDate, staffBookingBody, statusChangeBody, uuid } from "@/lib/validation";
 import { z } from "zod";
+import { toE164US } from "@/lib/phone";
 import type { AppointmentStatus } from "@/lib/domain/types";
 
 export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
@@ -159,4 +160,59 @@ export async function addPhotoAction(input: unknown): Promise<ActionResult> {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
   }
+}
+
+// ---------------- Phase 2: missed-call text-back ----------------
+const simCallBody = z.object({
+  phone: z.string().max(32),
+  language: z.enum(["en", "vi"]).optional(),
+  outcome: z.enum(["missed", "booked"]),
+  when: z.enum(["now", "tonight"]),
+});
+
+/** Demo-only: runs the REAL text-back pipeline with the console SMS provider (nothing is sent). */
+export async function simulateMissedCallAction(input: unknown) {
+  const ctx = await getStaffContext();
+  if (!ctx.salon.isDemo) return { ok: false as const, error: "The simulator only runs for demo salons." };
+  const p = simCallBody.safeParse(input);
+  const phone = p.success ? toE164US(p.data.phone) : null;
+  if (!p.success || !phone) return { ok: false as const, error: "Enter a valid US phone number." };
+  const { processCallEnded } = await import("@/lib/textback/service");
+  const { localDateOf, localToUtc } = await import("@/lib/scheduling/time");
+  const tz = ctx.salon.timezone;
+  const now = p.data.when === "tonight" ? localToUtc(localDateOf(new Date(), tz), 21 * 60 + 45, tz) : new Date();
+  const r = await processCallEnded(
+    ctx.store,
+    ctx.salon,
+    { provider: "simulator", externalCallId: `sim-${crypto.randomUUID()}`, from: phone, outcome: p.data.outcome, language: p.data.language },
+    { now },
+  );
+  revalidatePath("/app", "layout");
+  if (r.status === "duplicate") return { ok: false as const, error: "Duplicate" };
+  return {
+    ok: true as const,
+    phone,
+    decision: r.decision.action === "skip" ? { action: "skip" as const, reason: r.decision.reason } : { action: r.decision.action, template: r.decision.template },
+    text: r.notification ? { body: r.notification.body, status: r.notification.status, scheduledFor: r.notification.scheduledFor } : undefined,
+    callback: !!r.callback,
+  };
+}
+
+export async function simulateReplyAction(phoneRaw: string, body: string) {
+  const ctx = await getStaffContext();
+  if (!ctx.salon.isDemo) return { ok: false as const, error: "The simulator only runs for demo salons." };
+  const phone = toE164US(phoneRaw);
+  if (!phone || !body.trim()) return { ok: false as const, error: "Need a phone and a message." };
+  const { handleInboundSms } = await import("@/lib/textback/service");
+  const r = await handleInboundSms(ctx.store, ctx.salon, phone, body.slice(0, 500));
+  revalidatePath("/app", "layout");
+  return { ok: true as const, intent: r.intent, reply: r.reply };
+}
+
+export async function resolveCallbackAction(id: string, status: "done" | "dismissed"): Promise<ActionResult> {
+  const ctx = await getStaffContext();
+  if (!uuid.safeParse(id).success || !["done", "dismissed"].includes(status)) return { ok: false, error: "Invalid request" };
+  await ctx.store.resolveCallback(ctx.salon.id, id, status);
+  revalidatePath("/app", "layout");
+  return { ok: true };
 }

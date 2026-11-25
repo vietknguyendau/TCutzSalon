@@ -43,6 +43,7 @@ export const tcutzSalon: Salon = {
   isDemo: true,
   brand: { primary: "#1C1B1A", accent: "#C9A96E", background: "#F5F0E8" },
   ownerFirstName: "Diem",
+  providerNumber: "+17635550100", // fictional demo number
   settings: {
     slotIntervalMinutes: 15,
     minBookingNoticeMinutes: 60,
@@ -53,6 +54,8 @@ export const tcutzSalon: Salon = {
     supportedLanguages: ["en", "vi"],
     defaultLanguage: "en",
     manageLinkTtlDays: 30,
+    quietHours: { start: "20:00", end: "09:00" },
+    missedCallTextBack: { enabled: true, dedupeHours: 12, upcomingWindowDays: 14 },
   },
 };
 
@@ -147,7 +150,7 @@ type CustSeed = [n: number, first: string, last: string, phoneSuffix: string, la
 const CUST: CustSeed[] = [
   [1, "Minh", "Nguyen", "0101", "vi", SVC_ID.mens, 14, 3000, { photoConsent: true }],
   [2, "Bao", "Nguyen", "0101", "vi", SVC_ID.child, 6, 2500, { notes: "Minh's son — shares household phone." }],
-  [3, "Robert", "Anderson", "0102", "en", SVC_ID.senior, 22, 2000, { notes: "Prefers Tuesday mornings. Hard of hearing — speak clearly." }],
+  [3, "Robert", "Anderson", "0102", "en", SVC_ID.senior, 22, 2000, { notes: "Prefers Tuesday mornings. Hard of hearing — speak clearly. Calls from a landline." }],
   [4, "Linh", "Tran", "0103", "vi", SVC_ID.womens, 8, 5500, { photoConsent: true }],
   [5, "Marcus", "Johnson", "0104", "en", SVC_ID.mensBeard, 11, 4000, { photoConsent: true }],
   [6, "Hoa", "Pham", "0105", "vi", SVC_ID.color, 4, 9500, { notes: "Color client. Patch test on file." }],

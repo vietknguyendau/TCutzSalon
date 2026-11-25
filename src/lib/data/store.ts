@@ -1,4 +1,7 @@
 import type {
+  CallLog,
+  CallbackRequest,
+  NotificationRecord,
   Appointment,
   AppointmentSource,
   AppointmentStatus,
@@ -34,6 +37,7 @@ export interface CreateAppointmentInput {
   customerNote?: string;
   initialStatus?: AppointmentStatus;
   actorUserId?: string;
+  attribution?: string;
 }
 
 export type StoreResult<T> = { ok: true; value: T } | { ok: false; code: BookingErrorCode };
@@ -108,6 +112,28 @@ export interface DataStore {
   recordConsent(salonId: string, customerId: string, consent: "photo" | "sms_transactional" | "sms_marketing", granted: boolean, method: string, actorUserId?: string): Promise<void>;
   /** Attaches a photo to the most recent haircut history entry (creates today's entry if none). Requires photo consent. */
   addHaircutPhoto(salonId: string, customerId: string, angle: "front" | "side" | "back", jpegDataUrl: string, actorUserId?: string): Promise<StoreResult<{ id: string }>>;
+
+  // ---- communications (Phase 2) ----
+  findSalonByProviderNumber(e164: string): Promise<Salon | null>;
+  /** Returns true the first time a (provider, externalId) pair is seen — webhook idempotency. */
+  recordWebhookEvent(provider: string, externalId: string, payload: unknown, salonId?: string): Promise<boolean>;
+  isOptedOut(salonId: string, phoneE164: string): Promise<boolean>;
+  setOptOut(salonId: string, phoneE164: string, optedOut: boolean, source: "sms_keyword" | "staff" | "web"): Promise<void>;
+  lastNotificationAt(salonId: string, toE164: string, templates: string[]): Promise<Date | null>;
+  createNotification(n: Omit<NotificationRecord, "id" | "createdAt">): Promise<NotificationRecord>;
+  updateNotification(id: string, patch: Partial<Pick<NotificationRecord, "status" | "provider" | "providerMessageId" | "sentAt" | "error" | "segments">>): Promise<void>;
+  markNotificationByProviderId(providerMessageId: string, status: "delivered" | "failed", error?: string): Promise<void>;
+  /** Queued notifications due to send, across all salons (cron dispatcher). */
+  listDueNotifications(now: Date, limit: number): Promise<NotificationRecord[]>;
+  listNotifications(salonId: string, limit: number): Promise<NotificationRecord[]>;
+  /** Insert-or-merge by (provider, externalCallId). */
+  upsertCall(c: Omit<CallLog, "id" | "createdAt">): Promise<CallLog>;
+  getCall(provider: string, externalCallId: string): Promise<CallLog | null>;
+  listCalls(salonId: string, since: Date): Promise<CallLog[]>;
+  /** One open request per phone: a repeat appends the message to the existing open request. */
+  createCallback(c: Omit<CallbackRequest, "id" | "createdAt" | "status">): Promise<CallbackRequest>;
+  listCallbacks(salonId: string, status: CallbackRequest["status"]): Promise<CallbackRequest[]>;
+  resolveCallback(salonId: string, id: string, status: "done" | "dismissed"): Promise<void>;
 
   saveVerification(rec: Omit<VerificationRecord, "id" | "attempts">): Promise<VerificationRecord>;
   latestVerification(salonId: string, phoneE164: string): Promise<VerificationRecord | null>;

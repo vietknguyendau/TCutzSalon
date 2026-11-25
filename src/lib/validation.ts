@@ -41,6 +41,8 @@ export const publicBookingBody = z.object({
   // Returning-customer path: must present a verified-phone token for the same phone.
   customerId: uuid.optional(),
   verifiedToken: z.string().max(1024).optional(),
+  /** Attribution ref from the link that brought them ("m" = missed-call text). */
+  ref: z.enum(["m"]).optional(),
 });
 export type PublicBookingBody = z.infer<typeof publicBookingBody>;
 

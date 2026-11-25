@@ -9,7 +9,7 @@ import { addDays, addMinutes, formatLocalTime, localDateOf, localDayBounds } fro
 import type { BookingErrorCode, DataStore } from "../data/store";
 import { env, signingSecret } from "../env";
 import { hashCode, signToken, verifyToken } from "../tokens";
-import { getSmsProvider } from "../providers/sms";
+import { smsProviderFor } from "../providers/sms";
 import type { PublicBookingBody } from "../validation";
 import { formatPrice } from "../money";
 
@@ -123,6 +123,7 @@ export async function bookPublic(
     source: body.customerId ? "rebooking" : channel,
     idempotencyKey,
     customerNote: body.note,
+    attribution: body.ref === "m" ? "missed_call_text" : undefined,
   });
   if (!res.ok) return { ok: false, error: res.code };
 
@@ -142,7 +143,7 @@ async function sendConfirmation(salon: Salon, appt: Appointment, svc: Service, t
       ? `${salon.name}: ${pending ? "Đã nhận yêu cầu" : "Đã đặt lịch"} ${svc.nameVi} lúc ${when}. Đổi/hủy: ${link}`
       : `${salon.name}: ${pending ? "Request received for" : "You're booked for"} ${svc.nameEn} on ${when}. Manage: ${link} Reply STOP to opt out.`;
   try {
-    await getSmsProvider(salon.isDemo ? "console" : env().SMS_PROVIDER).send({ to, body, category: "transactional", salonId: salon.id });
+    await (await smsProviderFor(salon, env().SMS_PROVIDER)).send({ to, from: salon.providerNumber, body, category: "transactional", salonId: salon.id });
   } catch (e) {
     // A failed confirmation text must never undo a successful booking.
     console.error("confirmation sms failed", e);
@@ -164,7 +165,7 @@ export async function startVerification(store: DataStore, salon: Salon, phone: s
   const body =
     language === "vi" ? `${salon.name}: Mã xác minh của anh/chị là ${code}` : `${salon.name}: Your verification code is ${code}`;
   const demo = salon.isDemo || env().SMS_PROVIDER === "console";
-  await getSmsProvider(demo ? "console" : env().SMS_PROVIDER).send({ to: phone, body, category: "verification", salonId: salon.id });
+  await (await smsProviderFor(salon, env().SMS_PROVIDER)).send({ to: phone, from: salon.providerNumber, body, category: "verification", salonId: salon.id });
   // Response is identical whether or not the phone has a profile (no account enumeration).
   // In demo/test mode only, the code is returned so the demo works without a real phone.
   return { sent: true, demoCode: demo ? code : undefined };

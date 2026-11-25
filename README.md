@@ -13,6 +13,7 @@ npm run dev            # http://localhost:3000
 ```
 
 - `/app/today` — owner dashboard (Tcutz demo, synthetic customers)
+- `/app/receptionist` ("Phone & texts") — missed-call text-back simulator: pick a caller, see the text they'd get, reply STOP/CALL.
 - `/book/tcutz` — customer booking page (EN/VI). On "Book my usual", use phone `(763) 555-0101` (shared household: Minh + Bao) or `555-0103`. The demo shows the verification code on screen.
 
 Demo mode keeps data **in memory**: it resets on restart and at local midnight. It is clearly bannered and never sends texts.
@@ -32,6 +33,7 @@ Demo mode keeps data **in memory**: it resets on restart and at local midnight. 
 ```
 docs/ARCHITECTURE.md      architecture, route map, ERD, costs, AI vendor comparison, security, discovery questions
 docs/DEPLOYMENT.md        Supabase, Vercel, GitHub, Wix, DNS, go-live migration checklist
+docs/TWILIO_SETUP.md      missed-call text-back: 10DLC, number config, call forwarding, test plan
 supabase/migrations/      schema, RLS, booking RPC, storage policies
 supabase/tests/           local-Postgres stubs + DB assertions
 src/lib/scheduling/       pure availability engine (no I/O)

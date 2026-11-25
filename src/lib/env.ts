@@ -10,6 +10,12 @@ const schema = z.object({
   APP_SIGNING_SECRET: z.string().min(32).optional(),
   SMS_PROVIDER: z.enum(["console", "twilio"]).default("console"),
   DEFAULT_SALON_SLUG: z.string().default("tcutz"),
+  TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-f]{32}$/).optional(),
+  TWILIO_AUTH_TOKEN: z.string().min(16).optional(),
+  TWILIO_MESSAGING_SERVICE_SID: z.string().regex(/^MG[0-9a-f]{32}$/).optional(),
+  TWILIO_LINE_LOOKUP: z.enum(["on", "off"]).default("on"),
+  /** Vercel Cron sends `Authorization: Bearer $CRON_SECRET`. */
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -22,6 +28,9 @@ export function env(): Env {
     const missing = (["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "APP_SIGNING_SECRET"] as const)
       .filter((k) => !parsed[k]);
     if (missing.length) throw new Error(`DATA_MODE=supabase requires: ${missing.join(", ")}`);
+  }
+  if (parsed.SMS_PROVIDER === "twilio" && (!parsed.TWILIO_ACCOUNT_SID || !parsed.TWILIO_AUTH_TOKEN)) {
+    throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN");
   }
   if (process.env.NODE_ENV === "production" && parsed.DATA_MODE === "supabase" && !parsed.APP_SIGNING_SECRET) {
     throw new Error("APP_SIGNING_SECRET is required in production");

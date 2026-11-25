@@ -6,6 +6,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  CallLog,
+  CallbackRequest,
+  NotificationRecord,
   Appointment,
   Customer,
   HaircutHistoryEntry,
@@ -36,6 +39,7 @@ function mapSalon(r: Row, settings: Row | null): Salon {
     address: r.address ?? "",
     websiteUrl: r.website_url ?? undefined,
     isDemo: r.is_demo,
+    providerNumber: r.provider_number_e164 ?? undefined,
     brand: { primary: "#1C1B1A", accent: "#C9A96E", background: "#F5F0E8", ...(r.brand ?? {}) },
     settings: {
       slotIntervalMinutes: settings?.slot_interval_minutes ?? 15,
@@ -48,6 +52,13 @@ function mapSalon(r: Row, settings: Row | null): Salon {
       defaultLanguage: settings?.default_language ?? "en",
       manageLinkTtlDays: settings?.manage_link_ttl_days ?? 30,
       cancellationPolicyEn: settings?.cancellation_policy ?? undefined,
+      quietHours: settings?.quiet_hours ?? { start: "20:00", end: "09:00" },
+      missedCallTextBack: {
+        enabled: settings?.missed_call_settings?.enabled ?? true,
+        dedupeHours: settings?.missed_call_settings?.dedupe_hours ?? 12,
+        upcomingWindowDays: settings?.missed_call_settings?.upcoming_window_days ?? 14,
+      },
+      publicBookingUrl: settings?.public_booking_url ?? undefined,
     },
   };
 }
@@ -70,7 +81,25 @@ const mapAppointment = (r: Row): Appointment => ({
     durationMinutes: l.duration_minutes_snapshot,
   })),
   customerNote: r.customer_note ?? undefined, internalNote: r.internal_note ?? undefined, isDemo: r.is_demo,
-  createdAt: r.created_at, canceledAt: r.canceled_at ?? undefined,
+  createdAt: r.created_at, canceledAt: r.canceled_at ?? undefined, attribution: r.attribution ?? undefined,
+});
+
+const mapNotification = (r: Row): NotificationRecord => ({
+  id: r.id, salonId: r.salon_id, customerId: r.customer_id ?? undefined, appointmentId: r.appointment_id ?? undefined,
+  channel: "sms", category: r.category, template: r.template, toAddress: r.to_address, body: r.body, status: r.status,
+  provider: r.provider ?? undefined, providerMessageId: r.provider_message_id ?? undefined, scheduledFor: r.scheduled_for,
+  sentAt: r.sent_at ?? undefined, error: r.error ?? undefined, segments: r.segments ?? undefined, createdAt: r.created_at,
+});
+const mapCall = (r: Row): CallLog => ({
+  id: r.id, salonId: r.salon_id, provider: r.provider, externalCallId: r.external_call_id, fromE164: r.from_e164 ?? undefined,
+  language: r.language ?? undefined, startedAt: r.started_at ?? undefined, endedAt: r.ended_at ?? undefined,
+  durationSeconds: r.duration_seconds ?? undefined, outcome: r.outcome ?? undefined, appointmentId: r.appointment_id ?? undefined,
+  createdAt: r.created_at,
+});
+const mapCallback = (r: Row): CallbackRequest => ({
+  id: r.id, salonId: r.salon_id, customerId: r.customer_id ?? undefined, phoneE164: r.phone_e164, name: r.name ?? undefined,
+  reason: r.reason, message: r.message ?? undefined, language: r.language ?? undefined, status: r.status, createdAt: r.created_at,
+  resolvedAt: r.resolved_at ?? undefined,
 });
 
 function mapCustomer(r: Row): Customer {
@@ -99,11 +128,13 @@ export class SupabaseStore implements DataStore {
    */
   constructor(private db: SupabaseClient, private admin: SupabaseClient) {}
 
-  private async must<T>(p: PromiseLike<{ data: T | null; error: any }>): Promise<T> {
+  /** Unwraps a Supabase response or throws. Returns untyped rows; mappers below give them shape. */
+  private async must(p: PromiseLike<{ data: unknown; error: any }>): Promise<any> {
     const { data, error } = await p;
     if (error) throw new Error(`Supabase: ${error.message}`);
-    return data as T;
+    return data;
   }
+
 
   async getSalonBySlug(slug: string) {
     const r = await this.must(this.db.from("salons").select("*, salon_settings(*)").eq("slug", slug).maybeSingle());
@@ -182,6 +213,9 @@ export class SupabaseStore implements DataStore {
       throw new Error(`book_appointment failed: ${error.message}`);
     }
     const row = (Array.isArray(data) ? data[0] : data) as Row;
+    if (row.was_created && input.attribution) {
+      await this.must(this.admin.from("appointments").update({ attribution: input.attribution }).eq("id", row.appointment_id));
+    }
     const appt = await this.must(this.admin.from("appointments").select(APPT_SELECT).eq("id", row.appointment_id).single());
     return { ok: true, value: { appointment: mapAppointment(appt as unknown as Row), created: row.was_created } };
   }
@@ -307,6 +341,102 @@ export class SupabaseStore implements DataStore {
     // Phase 1 gap: Supabase Storage upload (signed upload URL → haircut-photos/{salon}/{customer}/{uuid}.jpg,
     // then insert haircut_photos with consent_id) is not wired yet. Storage policies already exist (0004).
     throw new Error("Photo upload to Supabase Storage is not implemented yet — see IMPLEMENTATION_STATUS.md");
+  }
+
+  async findSalonByProviderNumber(e164: string) {
+    const r = await this.must(this.admin.from("salons").select("*, salon_settings(*)").eq("provider_number_e164", e164).maybeSingle());
+    return r ? mapSalon(r as Row, (r as Row).salon_settings) : null;
+  }
+  async recordWebhookEvent(provider: string, externalId: string, payload: unknown, salonId?: string) {
+    const { error } = await this.admin.from("webhook_events").insert({ provider, external_id: externalId, payload, salon_id: salonId ?? null });
+    if (!error) return true;
+    if (error.code === "23505") return false; // unique (provider, external_id) → duplicate delivery
+    throw new Error(`webhook_events: ${error.message}`);
+  }
+  async isOptedOut(salonId: string, phone: string) {
+    const r = await this.must(this.admin.from("sms_opt_outs").select("opted_out").eq("salon_id", salonId).eq("phone_e164", phone).maybeSingle());
+    return (r as Row | null)?.opted_out === true;
+  }
+  async setOptOut(salonId: string, phone: string, optedOut: boolean, source: "sms_keyword" | "staff" | "web") {
+    await this.must(this.admin.from("sms_opt_outs").upsert({ salon_id: salonId, phone_e164: phone, opted_out: optedOut, source, updated_at: new Date().toISOString() }));
+  }
+  async lastNotificationAt(salonId: string, to: string, templates: string[]) {
+    // scheduled_for = when the text went (or will go) out — a text held for quiet hours still counts.
+    const r = (await this.must(this.admin.from("notifications").select("scheduled_for").eq("salon_id", salonId).eq("to_address", to)
+      .in("template", templates).not("status", "in", "(failed,suppressed)").order("scheduled_for", { ascending: false }).limit(1).maybeSingle())) as Row | null;
+    return r ? new Date(r.scheduled_for) : null;
+  }
+  async createNotification(n: Omit<NotificationRecord, "id" | "createdAt">) {
+    const r = await this.must(this.admin.from("notifications").insert({
+      salon_id: n.salonId, customer_id: n.customerId ?? null, appointment_id: n.appointmentId ?? null, channel: n.channel,
+      category: n.category, template: n.template, to_address: n.toAddress, body: n.body, status: n.status, provider: n.provider ?? null,
+      provider_message_id: n.providerMessageId ?? null, scheduled_for: n.scheduledFor, sent_at: n.sentAt ?? null, error: n.error ?? null,
+      segments: n.segments ?? null,
+    }).select("*").single());
+    return mapNotification(r as Row);
+  }
+  async updateNotification(id: string, p: Partial<NotificationRecord>) {
+    await this.must(this.admin.from("notifications").update({
+      ...(p.status ? { status: p.status } : {}), ...(p.provider ? { provider: p.provider } : {}), ...(p.providerMessageId ? { provider_message_id: p.providerMessageId } : {}),
+      ...(p.sentAt ? { sent_at: p.sentAt } : {}), ...(p.error !== undefined ? { error: p.error } : {}),
+      ...(p.segments !== undefined ? { segments: p.segments } : {}),
+    }).eq("id", id));
+  }
+  async markNotificationByProviderId(providerMessageId: string, status: "delivered" | "failed", error?: string) {
+    await this.must(this.admin.from("notifications").update({ status, error: error ?? null }).eq("provider_message_id", providerMessageId));
+  }
+  async listDueNotifications(now: Date, limit: number) {
+    const rows = await this.must(this.admin.from("notifications").select("*").eq("status", "queued").lte("scheduled_for", now.toISOString())
+      .order("scheduled_for").limit(limit));
+    return (rows as Row[]).map(mapNotification);
+  }
+  async listNotifications(salonId: string, limit: number) {
+    const rows = await this.must(this.db.from("notifications").select("*").eq("salon_id", salonId).order("created_at", { ascending: false }).limit(limit));
+    return (rows as Row[]).map(mapNotification);
+  }
+  async upsertCall(c: Omit<CallLog, "id" | "createdAt">) {
+    const row: Row = { salon_id: c.salonId, provider: c.provider, external_call_id: c.externalCallId };
+    if (c.fromE164) row.from_e164 = c.fromE164;
+    if (c.language) row.language = c.language;
+    if (c.startedAt) row.started_at = c.startedAt;
+    if (c.endedAt) row.ended_at = c.endedAt;
+    if (c.durationSeconds !== undefined) row.duration_seconds = c.durationSeconds;
+    if (c.outcome) row.outcome = c.outcome;
+    if (c.appointmentId) row.appointment_id = c.appointmentId;
+    const r = await this.must(this.admin.from("ai_call_logs").upsert(row, { onConflict: "provider,external_call_id" }).select("*").single());
+    return mapCall(r as Row);
+  }
+  async getCall(provider: string, externalCallId: string) {
+    const r = await this.must(this.admin.from("ai_call_logs").select("*").eq("provider", provider).eq("external_call_id", externalCallId).maybeSingle());
+    return r ? mapCall(r as Row) : null;
+  }
+  async listCalls(salonId: string, since: Date) {
+    const rows = await this.must(this.db.from("ai_call_logs").select("*").eq("salon_id", salonId).gte("created_at", since.toISOString())
+      .order("created_at", { ascending: false }));
+    return (rows as Row[]).map(mapCall);
+  }
+  async createCallback(c: Omit<CallbackRequest, "id" | "createdAt" | "status">) {
+    const open = (await this.must(this.admin.from("callback_requests").select("*").eq("salon_id", c.salonId).eq("phone_e164", c.phoneE164)
+      .eq("status", "open").limit(1).maybeSingle())) as Row | null;
+    if (open) {
+      const message = c.message ? (open.message ? `${open.message}\n${c.message}` : c.message).slice(0, 1000) : open.message;
+      const r = await this.must(this.admin.from("callback_requests").update({ message, ...(c.reason === "customer_asked" ? { reason: c.reason } : {}) })
+        .eq("id", open.id).select("*").single());
+      return mapCallback(r as Row);
+    }
+    const r = await this.must(this.admin.from("callback_requests").insert({
+      salon_id: c.salonId, customer_id: c.customerId ?? null, phone_e164: c.phoneE164, name: c.name ?? null, reason: c.reason,
+      message: c.message?.slice(0, 1000) ?? null, language: c.language ?? null,
+    }).select("*").single());
+    return mapCallback(r as Row);
+  }
+  async listCallbacks(salonId: string, status: CallbackRequest["status"]) {
+    const rows = await this.must(this.db.from("callback_requests").select("*").eq("salon_id", salonId).eq("status", status)
+      .order("created_at", { ascending: false }).limit(50));
+    return (rows as Row[]).map(mapCallback);
+  }
+  async resolveCallback(salonId: string, id: string, status: "done" | "dismissed") {
+    await this.must(this.db.from("callback_requests").update({ status, resolved_at: new Date().toISOString() }).eq("salon_id", salonId).eq("id", id));
   }
 
   async saveVerification(rec: Omit<VerificationRecord, "id" | "attempts">) {

@@ -53,7 +53,7 @@ function addDays(date: string, n: number) {
 }
 const newKey = () => crypto.randomUUID().replace(/-/g, "");
 
-export function BookingFlow({ salon, initialLang }: { salon: PublicSalon; initialLang?: Lang }) {
+export function BookingFlow({ salon, initialLang, bookingRef }: { salon: PublicSalon; initialLang?: Lang; bookingRef?: "m" }) {
   const [lang, setLang] = useState<Lang>(initialLang ?? "en");
   const [step, setStep] = useState<Step>(initialLang ? "service" : "lang");
   const t: Dict = dict[lang];
@@ -142,6 +142,7 @@ export function BookingFlow({ salon, initialLang }: { salon: PublicSalon; initia
           note: note.trim() || undefined,
           customerId: verified?.customerId,
           verifiedToken: verified?.token,
+          ref: bookingRef,
         }),
       });
       const json = await res.json();
