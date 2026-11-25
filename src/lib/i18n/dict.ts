@@ -1,5 +1,5 @@
 // Booking-flow strings. Vietnamese uses the polite salon register (anh/chị … ạ).
-// Have a native speaker from Tcutz's customer base review before launch.
+// Have a native speaker from the pilot salon's customer base review before launch.
 
 export const dict = {
   en: {

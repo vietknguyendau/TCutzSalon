@@ -1,7 +1,7 @@
 import { getStore } from "@/lib/data";
 import { readTwilioWebhook, say, twiml } from "@/lib/twilio-webhook";
 
-// Incoming call to the salon's Twilio number (calls Diem didn't pick up are forwarded here).
+// Incoming call to the salon's Twilio number (calls the owner didn't pick up are forwarded here).
 // Phase 2a: no AI yet — greet, offer Vietnamese, promise a text, hang up. The text is sent from
 // /voice-status once the call ends. Phase 2b replaces this TwiML with a hand-off to the AI agent.
 export async function POST(req: Request) {

@@ -40,6 +40,8 @@ function mapSalon(r: Row, settings: Row | null): Salon {
     websiteUrl: r.website_url ?? undefined,
     isDemo: r.is_demo,
     providerNumber: r.provider_number_e164 ?? undefined,
+    ownerFirstName: r.owner_first_name ?? undefined,
+    ownerTitleVi: r.owner_title_vi ?? undefined,
     brand: { primary: "#1C1B1A", accent: "#C9A96E", background: "#F5F0E8", ...(r.brand ?? {}) },
     settings: {
       slotIntervalMinutes: settings?.slot_interval_minutes ?? 15,
@@ -143,6 +145,13 @@ export class SupabaseStore implements DataStore {
   async getSalonById(id: string) {
     const r = await this.must(this.db.from("salons").select("*, salon_settings(*)").eq("id", id).maybeSingle());
     return r ? mapSalon(r as Row, (r as Row).salon_settings) : null;
+  }
+  async updateSalonProfile(salonId: string, p: { name: string; ownerFirstName?: string; ownerTitleVi?: string; phone?: string; address?: string }) {
+    // User-scoped client: RLS only lets the salon's owner (or a platform admin) update the salon row.
+    await this.must(this.db.from("salons").update({
+      name: p.name, owner_first_name: p.ownerFirstName ?? null, owner_title_vi: p.ownerTitleVi ?? null,
+      ...(p.phone ? { phone_e164: p.phone } : {}), address: p.address ?? null,
+    }).eq("id", salonId).select("id").single());
   }
   async listServices(salonId: string) {
     const rows = await this.must(this.db.from("services").select("*").eq("salon_id", salonId).order("sort_order"));

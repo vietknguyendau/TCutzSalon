@@ -165,7 +165,8 @@ export async function handleInboundSms(store: DataStore, salon: Salon, fromRaw: 
   const vi = customer?.preferredLanguage === "vi" || /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(body) || /^\s*g[oọ]i/i.test(body);
   const lang: Lang = vi ? "vi" : "en";
   const short = salon.name.split(/\s+(?:Barber|Salon|&)/)[0];
-  const owner = salon.ownerFirstName ?? (lang === "vi" ? "tiệm" : "the salon");
+  const ownerEn = salon.ownerFirstName ?? "The salon";
+  const ownerVi = salon.ownerFirstName ? `${salon.ownerTitleVi ? `${salon.ownerTitleVi} ` : ""}${salon.ownerFirstName}` : "tiệm";
   const name = customer ? [customer.firstName, customer.lastName].filter(Boolean).join(" ") : undefined;
 
   switch (intent) {
@@ -184,7 +185,7 @@ export async function handleInboundSms(store: DataStore, salon: Salon, fromRaw: 
       await store.createCallback({ salonId: salon.id, customerId: customer?.id, phoneE164: from, name, reason: "customer_asked", language: lang });
       return {
         intent,
-        reply: lang === "vi" ? `${short}: Dạ, ${owner === "tiệm" ? "tiệm" : `chị ${owner}`} sẽ gọi lại cho anh/chị sớm ạ.` : `${short}: Thanks! ${owner} will call you back soon.`,
+        reply: lang === "vi" ? `${short}: Dạ, ${ownerVi} sẽ gọi lại cho anh/chị sớm ạ.` : `${short}: Thanks! ${ownerEn} will call you back soon.`,
       };
     default: {
       await store.createCallback({ salonId: salon.id, customerId: customer?.id, phoneE164: from, name, reason: "sms_reply", message: body.slice(0, 500), language: lang });

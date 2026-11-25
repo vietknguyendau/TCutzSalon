@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { checkSlot, getAvailability, nearestSlots, type BusyBlock, type SchedulingContext } from "./engine";
 import { localToUtc, localDayBounds, formatLocalTime } from "./time";
-import { tcutzSalon, tcutzServices, tcutzStaff, STAFF_DIEM, STAFF_SAMPLE, SVC_ID } from "../data/fixtures";
+import { demoSalon, demoServices, demoStaff, STAFF_OWNER, STAFF_SAMPLE, SVC_ID } from "../data/fixtures";
 
 const TZ = "America/Chicago";
-const svc = (id: string) => tcutzServices.find((s) => s.id === id)!;
-const MONDAY = "2026-12-07"; // Diem works, Sample Stylist does not
+const svc = (id: string) => demoServices.find((s) => s.id === id)!;
+const MONDAY = "2026-12-07"; // Alex (owner) works, Jordan does not
 const TUESDAY = "2026-12-08"; // both work
 
 function ctx(overrides: Partial<SchedulingContext> = {}): SchedulingContext {
   return {
-    salon: tcutzSalon,
-    staff: tcutzStaff,
+    salon: demoSalon,
+    staff: demoStaff,
     busy: [],
     now: new Date("2026-12-01T12:00:00Z"),
     ...overrides,
@@ -34,7 +34,7 @@ describe("getAvailability", () => {
     expect(slots).toHaveLength(35); // (540 - 30) / 15 + 1
     expect(formatLocalTime(slots[0].start, TZ)).toBe("10:00 AM");
     expect(formatLocalTime(slots.at(-1)!.start, TZ)).toBe("6:30 PM");
-    expect(slots.every((s) => s.staffIds.join() === STAFF_DIEM)).toBe(true);
+    expect(slots.every((s) => s.staffIds.join() === STAFF_OWNER)).toBe(true);
   });
 
   it("uses Sunday hours (12:00–17:00)", () => {
@@ -44,8 +44,8 @@ describe("getAvailability", () => {
   });
 
   it("removes times that overlap an existing appointment (the '3:00 is booked, 3:30 is open' case)", () => {
-    const busy = [appt(STAFF_DIEM, MONDAY, "15:00", "15:30")];
-    const slots = getAvailability(ctx({ busy }), { date: MONDAY, service: svc(SVC_ID.mens), staffId: STAFF_DIEM, channel: "ai_phone" });
+    const busy = [appt(STAFF_OWNER, MONDAY, "15:00", "15:30")];
+    const slots = getAvailability(ctx({ busy }), { date: MONDAY, service: svc(SVC_ID.mens), staffId: STAFF_OWNER, channel: "ai_phone" });
     const times = slots.map((s) => formatLocalTime(s.start, TZ));
     expect(times).not.toContain("3:00 PM");
     expect(times).not.toContain("2:45 PM"); // would run into 3:00
@@ -56,7 +56,7 @@ describe("getAvailability", () => {
   });
 
   it("first available falls back to another qualified stylist", () => {
-    const busy = [appt(STAFF_DIEM, TUESDAY, "10:00", "12:00")];
+    const busy = [appt(STAFF_OWNER, TUESDAY, "10:00", "12:00")];
     const slots = getAvailability(ctx({ busy }), { date: TUESDAY, service: svc(SVC_ID.mens), channel: "website" });
     expect(slots[0].start).toBe(at(TUESDAY, "10:00").toISOString());
     expect(slots[0].staffIds).toEqual([STAFF_SAMPLE]);
@@ -69,7 +69,7 @@ describe("getAvailability", () => {
 
   it("applies staff-specific duration overrides", () => {
     const slots = getAvailability(ctx(), { date: TUESDAY, service: svc(SVC_ID.womens), staffId: STAFF_SAMPLE, channel: "website" });
-    // Sample Stylist: 60 min women's cut, works until 18:00 → last start 17:00
+    // Jordan: 60 min women's cut, works until 18:00 → last start 17:00
     expect(formatLocalTime(slots.at(-1)!.start, TZ)).toBe("5:00 PM");
     expect(new Date(slots[0].end).getTime() - new Date(slots[0].start).getTime()).toBe(60 * 60_000);
   });
@@ -77,7 +77,7 @@ describe("getAvailability", () => {
   it("cleanup buffers block the following slot", () => {
     // Color 13:00–15:00 + 10 min cleanup → staff free at 15:10 → next 15-min slot is 15:15
     const color = svc(SVC_ID.color);
-    const busy: BusyBlock[] = [{ staffId: STAFF_DIEM, start: at(MONDAY, "13:00"), end: at(MONDAY, "15:10"), kind: "appointment" }];
+    const busy: BusyBlock[] = [{ staffId: STAFF_OWNER, start: at(MONDAY, "13:00"), end: at(MONDAY, "15:10"), kind: "appointment" }];
     const times = getAvailability(ctx({ busy }), { date: MONDAY, service: svc(SVC_ID.mens), channel: "website" }).map((s) =>
       formatLocalTime(s.start, TZ),
     );
@@ -89,7 +89,7 @@ describe("getAvailability", () => {
   });
 
   it("respects staff time off (lunch, vacation)", () => {
-    const busy: BusyBlock[] = [{ staffId: STAFF_DIEM, start: at(MONDAY, "12:00"), end: at(MONDAY, "13:00"), kind: "time_off" }];
+    const busy: BusyBlock[] = [{ staffId: STAFF_OWNER, start: at(MONDAY, "12:00"), end: at(MONDAY, "13:00"), kind: "time_off" }];
     const times = getAvailability(ctx({ busy }), { date: MONDAY, service: svc(SVC_ID.mens), channel: "website" }).map((s) =>
       formatLocalTime(s.start, TZ),
     );
@@ -113,7 +113,7 @@ describe("getAvailability", () => {
   });
 
   it("returns nothing on closed dates (holidays)", () => {
-    const salon = { ...tcutzSalon, settings: { ...tcutzSalon.settings, closedDates: [MONDAY] } };
+    const salon = { ...demoSalon, settings: { ...demoSalon.settings, closedDates: [MONDAY] } };
     expect(getAvailability(ctx({ salon }), { date: MONDAY, service: svc(SVC_ID.mens), channel: "website" })).toHaveLength(0);
   });
 });
@@ -155,22 +155,22 @@ describe("daylight saving time (America/Chicago)", () => {
 describe("checkSlot", () => {
   it("lets staff book a walk-in outside online hours but never over a conflict", () => {
     const early = at(MONDAY, "09:30");
-    expect(checkSlot(ctx(), { service: svc(SVC_ID.mens), staffId: STAFF_DIEM, start: early, channel: "website" }).reason).toBe(
+    expect(checkSlot(ctx(), { service: svc(SVC_ID.mens), staffId: STAFF_OWNER, start: early, channel: "website" }).reason).toBe(
       "OUTSIDE_STAFF_HOURS",
     );
-    expect(checkSlot(ctx(), { service: svc(SVC_ID.mens), staffId: STAFF_DIEM, start: early, channel: "walk_in" }).ok).toBe(true);
-    const busy = [appt(STAFF_DIEM, MONDAY, "09:45", "10:15")];
-    expect(checkSlot(ctx({ busy }), { service: svc(SVC_ID.mens), staffId: STAFF_DIEM, start: early, channel: "walk_in" }).reason).toBe(
+    expect(checkSlot(ctx(), { service: svc(SVC_ID.mens), staffId: STAFF_OWNER, start: early, channel: "walk_in" }).ok).toBe(true);
+    const busy = [appt(STAFF_OWNER, MONDAY, "09:45", "10:15")];
+    expect(checkSlot(ctx({ busy }), { service: svc(SVC_ID.mens), staffId: STAFF_OWNER, start: early, channel: "walk_in" }).reason).toBe(
       "CONFLICT",
     );
   });
 
   it("ignores the appointment being rescheduled", () => {
     const start = at(MONDAY, "11:00");
-    const busy = [appt(STAFF_DIEM, MONDAY, "11:00", "11:30")];
+    const busy = [appt(STAFF_OWNER, MONDAY, "11:00", "11:30")];
     const res = checkSlot(ctx({ busy }), {
       service: svc(SVC_ID.mens),
-      staffId: STAFF_DIEM,
+      staffId: STAFF_OWNER,
       start: at(MONDAY, "11:15"),
       channel: "manual",
       ignoreAppointmentStart: start,
@@ -180,7 +180,7 @@ describe("checkSlot", () => {
 
   it("rejects services not enabled for the AI receptionist", () => {
     const s = { ...svc(SVC_ID.color), aiBookable: false };
-    expect(checkSlot(ctx(), { service: s, staffId: STAFF_DIEM, start: at(MONDAY, "11:00"), channel: "ai_phone" }).reason).toBe(
+    expect(checkSlot(ctx(), { service: s, staffId: STAFF_OWNER, start: at(MONDAY, "11:00"), channel: "ai_phone" }).reason).toBe(
       "SERVICE_NOT_BOOKABLE",
     );
   });

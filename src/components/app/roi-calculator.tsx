@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { calculateRoi, TCUTZ_ROI_DEFAULTS, type RoiInputs } from "@/lib/roi";
+import { calculateRoi, DEFAULT_ROI_INPUTS, type RoiInputs } from "@/lib/roi";
 import { Input, Label } from "@/components/ui/primitives";
 import { formatMoney } from "@/lib/money";
 
 export function RoiCalculator() {
-  const [i, setI] = useState<RoiInputs>(TCUTZ_ROI_DEFAULTS);
+  const [i, setI] = useState<RoiInputs>(DEFAULT_ROI_INPUTS);
   const r = calculateRoi(i);
   const field = (k: keyof RoiInputs, label: string, opts: { cents?: boolean; suffix?: string; help?: string } = {}) => (
     <div>

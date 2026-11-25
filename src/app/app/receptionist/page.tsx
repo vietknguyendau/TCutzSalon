@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<string, string> = { test_mode: "test mode", queued: "
 const NEXT = [
   "Retell vs. Vapi test calls in Vietnamese and English (scripted, 40 calls)",
   "AI answers instead of the greeting; books through the same booking API",
-  "Transfer to Diem, and AI escalations onto the call-back list",
+  "Transfer to the owner, and AI escalations onto the call-back list",
 ];
 
 export default async function ReceptionistPage() {

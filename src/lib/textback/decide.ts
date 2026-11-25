@@ -82,7 +82,7 @@ export function textBackBody(o: {
   link: string;
   upcoming?: { startsAt: Date; staffName?: string };
 }): string {
-  const short = o.salonName.split(/\s+(?:Barber|Salon|&)/)[0]; // "Tcutz Barber & Salon" → "Tcutz" keeps texts to 1–2 segments
+  const short = o.salonName.split(/\s+(?:Barber|Salon|&)/)[0]; // "Main Street Barber & Salon" → "Main Street" keeps texts to 1–2 segments
   if (o.upcoming) {
     const when = new Intl.DateTimeFormat(o.lang === "vi" ? "vi-VN" : "en-US", {
       weekday: "short",

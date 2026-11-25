@@ -16,8 +16,8 @@ export default function Home() {
           A digital appointment book, haircut memory for every regular, and English &amp; Vietnamese booking that works for customers who&apos;d rather not download anything.
         </p>
         <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-          <Link href="/app/today" className={buttonVariants({ variant: "gold", size: "lg" })}>Open the Tcutz demo dashboard</Link>
-          <Link href="/book/tcutz" className={buttonVariants({ variant: "outline", size: "lg", className: "border-cream-100/20 bg-transparent text-cream-50" })}>
+          <Link href="/app/today" className={buttonVariants({ variant: "gold", size: "lg" })}>Open the demo dashboard</Link>
+          <Link href="/book/demo" className={buttonVariants({ variant: "outline", size: "lg", className: "border-cream-100/20 bg-transparent text-cream-50" })}>
             See customer booking
           </Link>
         </div>

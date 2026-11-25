@@ -9,7 +9,7 @@ const schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20).optional(),
   APP_SIGNING_SECRET: z.string().min(32).optional(),
   SMS_PROVIDER: z.enum(["console", "twilio"]).default("console"),
-  DEFAULT_SALON_SLUG: z.string().default("tcutz"),
+  DEFAULT_SALON_SLUG: z.string().default("demo"),
   TWILIO_ACCOUNT_SID: z.string().regex(/^AC[0-9a-f]{32}$/).optional(),
   TWILIO_AUTH_TOKEN: z.string().min(16).optional(),
   TWILIO_MESSAGING_SERVICE_SID: z.string().regex(/^MG[0-9a-f]{32}$/).optional(),

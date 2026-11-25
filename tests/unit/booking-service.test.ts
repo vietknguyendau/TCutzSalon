@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DemoStore, resetDemoState } from "@/lib/data/demo-store";
 import { bookPublic, changeStatus, checkVerification, startVerification, availableSlots } from "@/lib/booking/service";
-import { STAFF_DIEM, SVC_ID, tcutzSalon, fid } from "@/lib/data/fixtures";
+import { STAFF_OWNER, SVC_ID, demoSalon, fid } from "@/lib/data/fixtures";
 import { addDays, localDateOf } from "@/lib/scheduling/time";
 import { publicBookingBody } from "@/lib/validation";
 
 const store = new DemoStore();
-const salon = tcutzSalon;
+const salon = demoSalon;
 const day = () => addDays(localDateOf(new Date(), salon.timezone), 3);
 
 async function firstSlot(serviceId = SVC_ID.mens) {
-  const r = await availableSlots(store, salon, { serviceId, date: day(), staffId: STAFF_DIEM, channel: "website" });
+  const r = await availableSlots(store, salon, { serviceId, date: day(), staffId: STAFF_OWNER, channel: "website" });
   if (!r.ok || !r.value.length) throw new Error("no slots");
   return r.value[0].start;
 }
 const body = (over: Record<string, unknown> = {}) =>
-  publicBookingBody.parse({ serviceId: SVC_ID.mens, staffId: STAFF_DIEM, firstName: "Ana", phone: "7635550188", language: "en", smsConsent: false, ...over });
+  publicBookingBody.parse({ serviceId: SVC_ID.mens, staffId: STAFF_OWNER, firstName: "Ana", phone: "7635550188", language: "en", smsConsent: false, ...over });
 
 beforeEach(() => resetDemoState());
 
@@ -36,7 +36,7 @@ describe("bookPublic (shared booking service)", () => {
     await bookPublic(store, salon, body({ startsAt }), "k-first-0001");
     const second = await bookPublic(store, salon, body({ startsAt, firstName: "Bo", phone: "7635550189" }), "k-second-001");
     expect(second.ok).toBe(false);
-    const after = await availableSlots(store, salon, { serviceId: SVC_ID.mens, date: day(), staffId: STAFF_DIEM, channel: "website" });
+    const after = await availableSlots(store, salon, { serviceId: SVC_ID.mens, date: day(), staffId: STAFF_OWNER, channel: "website" });
     expect(after.ok && after.value.some((s) => s.start === startsAt)).toBe(false);
   });
 

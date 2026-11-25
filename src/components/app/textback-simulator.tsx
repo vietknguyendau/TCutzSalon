@@ -17,7 +17,7 @@ const PRESETS = [
 const EXPLAIN: Record<string, string> = {
   send: "Text sent right away (test mode — nothing actually leaves the system).",
   schedule: "It's quiet hours, so the text is held and goes out at 9:00 AM.",
-  LANDLINE: "Landline — it can't receive texts. Added to Diem's call-back list instead.",
+  LANDLINE: "Landline — it can't receive texts. Added to the owner's call-back list instead.",
   RECENTLY_TEXTED: "Already texted this number in the last 12 hours — no second text.",
   OPTED_OUT: "This number replied STOP — the salon never texts it again unless they send START.",
   NOT_A_MISSED_CALL: "The AI booked them, so no follow-up text is needed (they get the normal confirmation).",
@@ -31,7 +31,7 @@ export function TextBackSimulator() {
   const [phone, setPhone] = useState(PRESETS[0].phone);
   const [language, setLanguage] = useState<"en" | "vi" | "">("");
   const [outcome, setOutcome] = useState<"missed" | "booked">("missed");
-  const [when, setWhen] = useState<"now" | "tonight">("now");
+  const [when, setWhen] = useState<"now" | "afternoon" | "tonight">("afternoon");
   const [result, setResult] = useState<SimResult>();
   const [thread, setThread] = useState<{ from: "them" | "salon"; text: string }[]>([]);
   const [reply, setReply] = useState("");
@@ -70,7 +70,7 @@ export function TextBackSimulator() {
         </div>
         <Seg label="Language on the call" value={language} onChange={setLanguage} options={[["", "Didn't choose"], ["vi", "Pressed 2 · Tiếng Việt"], ["en", "English"]]} />
         <Seg label="What happened" value={outcome} onChange={setOutcome} options={[["missed", "Nobody answered"], ["booked", "AI booked them"]]} />
-        <Seg label="When" value={when} onChange={setWhen} options={[["now", "Right now"], ["tonight", "9:45 PM tonight"]]} />
+        <Seg label="When" value={when} onChange={setWhen} options={[["afternoon", "2:00 PM today"], ["now", "Right now"], ["tonight", "9:45 PM tonight"]]} />
         <Button variant="gold" size="lg" onClick={run} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <PhoneIncoming />} Simulate the call ending
         </Button>

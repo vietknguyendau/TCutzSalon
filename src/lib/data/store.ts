@@ -83,6 +83,7 @@ export interface DataStore {
   getSalonBySlug(slug: string): Promise<Salon | null>;
   getSalonById(id: string): Promise<Salon | null>;
   listServices(salonId: string): Promise<Service[]>;
+  updateSalonProfile(salonId: string, p: { name: string; ownerFirstName?: string; ownerTitleVi?: string; phone?: string; address?: string }): Promise<void>;
   listStaff(salonId: string): Promise<Staff[]>;
   listBusy(salonId: string, from: Date, to: Date): Promise<BusyBlock[]>;
 

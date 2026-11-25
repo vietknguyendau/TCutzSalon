@@ -16,7 +16,7 @@ export interface RoiResult {
   annualRoiPct: number | null; // null when cost is 0
 }
 
-export const TCUTZ_ROI_DEFAULTS: RoiInputs = {
+export const DEFAULT_ROI_INPUTS: RoiInputs = {
   averageServiceCents: 3000,
   variableExpensePct: 15,
   monthlyFeeCents: 14900,

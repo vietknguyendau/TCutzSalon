@@ -2,7 +2,7 @@
 \set ON_ERROR_STOP on
 begin;
 
--- Fixtures: a second salon, and two users (Tcutz owner, other-salon owner).
+-- Fixtures: a second salon, and two users (demo salon owner, other-salon owner).
 insert into auth.users (id, email) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'diem@example.test'),
   ('bbbbbbbb-0000-4000-8000-000000000002', 'other@example.test'),
@@ -27,7 +27,7 @@ insert into ai_call_logs (salon_id, provider, external_call_id, from_e164, outco
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', true);
 do $$ begin
-  if (select count(*) from customers) <> 10 then raise exception 'Tcutz owner should see exactly 10 customers, saw %', (select count(*) from customers); end if;
+  if (select count(*) from customers) <> 10 then raise exception 'Demo owner should see exactly 10 customers, saw %', (select count(*) from customers); end if;
   if exists (select 1 from customers where first_name = 'Secret') then raise exception 'LEAK: saw other salon customer'; end if;
   if (select count(*) from salons) <> 1 then raise exception 'LEAK: saw other salon row'; end if;
   if (select count(*) from appointments) = 0 then raise exception 'Owner should see own appointments'; end if;
@@ -181,7 +181,7 @@ do $$ begin
     insert into webhook_events (provider, external_id, payload) values ('twilio', 'call-ended:CA-dup', '{}');
     raise exception 'duplicate webhook accepted';
   exception when unique_violation then null; end;
-  if (select provider_number_e164 from salons where slug = 'tcutz') <> '+17635550100' then raise exception 'seed provider number missing'; end if;
+  if (select provider_number_e164 from salons where slug = 'demo') <> '+16125550100' then raise exception 'seed provider number missing'; end if;
 end $$;
 
 -- ---------- Anonymize ----------

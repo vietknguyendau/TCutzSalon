@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("customer books a men's haircut in Vietnamese and gets a manage link", async ({ page }) => {
-  await page.goto("/book/tcutz");
+  await page.goto("/book/demo");
   await expect(page.getByText("DEMO")).toBeVisible();
   await page.getByRole("button", { name: /Tiếng Việt/ }).click();
   await page.getByRole("button", { name: /Cắt tóc nam\s/ }).first().click();
@@ -23,7 +23,7 @@ test("customer books a men's haircut in Vietnamese and gets a manage link", asyn
 });
 
 test("returning customer verifies phone and books their usual", async ({ page }) => {
-  await page.goto("/book/tcutz?lang=en");
+  await page.goto("/book/demo?lang=en");
   await page.getByRole("button", { name: /Book my usual/ }).click();
   await page.getByPlaceholder("Mobile number").fill("(763) 555-0103"); // Linh — single profile
   await page.getByRole("button", { name: "Text me a code" }).click();

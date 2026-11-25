@@ -1,16 +1,40 @@
 import { getStaffContext } from "@/lib/auth";
 import { Card } from "@/components/ui/primitives";
 import { formatPhoneUS } from "@/lib/phone";
+import { SalonProfileForm } from "@/components/app/salon-profile-form";
+import { readDemoBranding } from "@/lib/data/demo-branding";
+import { DEMO_BRAND_PARAM, encodeProfile } from "@/lib/salon-profile";
+import { env } from "@/lib/env";
 
 export const metadata = { title: "Settings" };
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default async function SettingsPage() {
-  const { salon, demo } = await getStaffContext();
+  const { salon, demo, role } = await getStaffContext();
   const s = salon.settings;
+  const branding = demo ? await readDemoBranding() : null;
+  const app = env().NEXT_PUBLIC_APP_URL;
+  const shareLinks = branding
+    ? {
+        booking: `${app}/book/${salon.slug}?${DEMO_BRAND_PARAM}=${encodeProfile(branding)}`,
+        dashboard: `${app}/app/today?${DEMO_BRAND_PARAM}=${encodeProfile(branding)}`,
+      }
+    : undefined;
+  const canEdit = role === "owner" || role === "manager";
   return (
     <div className="max-w-3xl">
       <h1 className="mb-5 font-display text-3xl">Settings</h1>
+      {canEdit && (
+        <Card className="mb-4 p-5">
+          <h2 className="mb-1 text-lg font-semibold">Salon profile</h2>
+          <p className="mb-4 text-sm text-ink-600">Change these any time — the dashboard, booking page and texts update right away.</p>
+          <SalonProfileForm
+            demo={demo}
+            shareLinks={shareLinks}
+            initial={{ name: salon.name, ownerFirstName: salon.ownerFirstName, ownerTitleVi: salon.ownerTitleVi, phone: formatPhoneUS(salon.phone), address: salon.address }}
+          />
+        </Card>
+      )}
       <Card className="mb-4 p-5">
         <h2 className="mb-3 text-lg font-semibold">Salon</h2>
         <dl className="grid gap-2 text-[15px] sm:grid-cols-2">
@@ -41,7 +65,7 @@ export default async function SettingsPage() {
           <Item k="Languages" v={s.supportedLanguages.map((l) => (l === "vi" ? "Vietnamese" : "English")).join(", ")} />
         </dl>
       </Card>
-      <p className="mt-4 text-sm text-ink-400">Editing these in the app comes after the owner discovery session. Values come from tcutz-salon.com and must be confirmed with the owner.</p>
+      <p className="mt-4 text-sm text-ink-400">Editing hours and booking rules in the app comes after the owner discovery session. In the demo these are typical barbershop defaults; for a real salon, confirm them with the owner.</p>
     </div>
   );
 }

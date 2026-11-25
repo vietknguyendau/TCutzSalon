@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { calculateRoi, TCUTZ_ROI_DEFAULTS } from "./roi";
+import { calculateRoi, DEFAULT_ROI_INPUTS } from "./roi";
 import { signToken, verifyToken } from "./tokens";
 import { formatPhoneUS, toE164US } from "./phone";
 import { formatPrice } from "./money";
 import { canTransition, primaryNextStatus } from "./domain/status";
 import { publicBookingBody } from "./validation";
 
-describe("ROI calculator (Tcutz illustrative defaults)", () => {
-  const r = calculateRoi(TCUTZ_ROI_DEFAULTS);
+describe("ROI calculator (illustrative defaults)", () => {
+  const r = calculateRoi(DEFAULT_ROI_INPUTS);
   it("contribution per $30 cut at 15% variable cost is $25.50", () => expect(r.contributionPerAppointmentCents).toBe(2550));
   it("breaks even at 6 additional cuts per month against $149", () => expect(r.breakEvenAppointmentsPerMonth).toBe(6));
   it("10 extra cuts → $300 revenue, $106 monthly profit after fee", () => {
@@ -15,12 +15,12 @@ describe("ROI calculator (Tcutz illustrative defaults)", () => {
     expect(r.incrementalProfitMonthlyCents).toBe(25500 - 14900);
   });
   it("annual ROI includes setup fee", () => {
-    const withSetup = calculateRoi({ ...TCUTZ_ROI_DEFAULTS, setupFeeCents: 50000 });
+    const withSetup = calculateRoi({ ...DEFAULT_ROI_INPUTS, setupFeeCents: 50000 });
     expect(withSetup.annualCostCents).toBe(14900 * 12 + 50000);
     expect(withSetup.annualIncrementalProfitCents).toBe(25500 * 12 - (14900 * 12 + 50000));
   });
   it("zero extra appointments is a loss equal to the subscription", () => {
-    const z = calculateRoi({ ...TCUTZ_ROI_DEFAULTS, additionalAppointmentsPerMonth: 0 });
+    const z = calculateRoi({ ...DEFAULT_ROI_INPUTS, additionalAppointmentsPerMonth: 0 });
     expect(z.annualRoiPct).toBe(-100);
   });
 });
@@ -84,5 +84,53 @@ describe("public booking validation", () => {
   it("rejects script injection in names and bad phones", () => {
     expect(publicBookingBody.safeParse({ ...base, firstName: "<script>" }).success).toBe(false);
     expect(publicBookingBody.safeParse({ ...base, phone: "12" }).success).toBe(false);
+  });
+});
+
+import { applyDemoOverrides } from "./data/demo-config";
+import { demoSalon, demoStaff, STAFF_OWNER } from "./data/fixtures";
+
+describe("per-prospect demo overrides", () => {
+  it("renames the demo salon and owner without touching data", () => {
+    const { salon, staff } = applyDemoOverrides(demoSalon, demoStaff, {
+      DEMO_SALON_NAME: "Lan's Hair Studio",
+      DEMO_OWNER_NAME: "Lan",
+      DEMO_OWNER_TITLE_VI: "chị",
+      DEMO_SALON_PHONE: "(651) 555-0142",
+      DEMO_TIMEZONE: "Not/AZone",
+    });
+    expect(salon.name).toBe("Lan's Hair Studio");
+    expect(salon.ownerTitleVi).toBe("chị");
+    expect(salon.phone).toBe("+16515550142");
+    expect(salon.timezone).toBe("America/Chicago"); // invalid zone ignored
+    expect(staff.find((s) => s.id === STAFF_OWNER)?.displayName).toBe("Lan");
+    expect(salon.id).toBe(demoSalon.id);
+  });
+  it("defaults to the fictional demo salon", () => {
+    expect(applyDemoOverrides(demoSalon, demoStaff, {}).salon.name).toBe("Main Street Barber & Salon");
+  });
+});
+
+import { decodeProfile, encodeProfile, salonProfileSchema } from "./salon-profile";
+import { brandSalon } from "./data/demo-branding";
+
+describe("editable salon profile", () => {
+  it("round-trips through the cookie/link encoding (Vietnamese and apostrophes intact)", () => {
+    const p = salonProfileSchema.parse({ name: "Lan's Hair Studio", ownerFirstName: "Lan", ownerTitleVi: "chị", phone: "(651) 555-0142", address: "Eagan, MN" });
+    expect(decodeProfile(encodeProfile(p))).toEqual({ name: "Lan's Hair Studio", ownerFirstName: "Lan", ownerTitleVi: "chị", phone: "+16515550142", address: "Eagan, MN" });
+  });
+  it("rejects tampered or hostile values", () => {
+    expect(decodeProfile("not!base64")).toBeNull();
+    expect(decodeProfile(Buffer.from(JSON.stringify({ name: "<script>x</script>" })).toString("base64url"))).toBeNull();
+    expect(decodeProfile(Buffer.from(JSON.stringify({ name: "A" })).toString("base64url"))).toBeNull();
+    expect(decodeProfile("x".repeat(2000))).toBeNull();
+    expect(salonProfileSchema.safeParse({ name: "Ok Salon", ownerTitleVi: "sir" }).success).toBe(false);
+  });
+  it("blank optional fields keep the salon's existing values", () => {
+    const p = salonProfileSchema.parse({ name: "Fade Factory", ownerFirstName: "", phone: "", address: "" });
+    const s = brandSalon(demoSalon, p);
+    expect(s.name).toBe("Fade Factory");
+    expect(s.phone).toBe(demoSalon.phone);
+    expect(s.ownerFirstName).toBe("Alex");
   });
 });

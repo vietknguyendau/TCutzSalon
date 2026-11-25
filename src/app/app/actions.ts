@@ -167,7 +167,7 @@ const simCallBody = z.object({
   phone: z.string().max(32),
   language: z.enum(["en", "vi"]).optional(),
   outcome: z.enum(["missed", "booked"]),
-  when: z.enum(["now", "tonight"]),
+  when: z.enum(["now", "afternoon", "tonight"]),
 });
 
 /** Demo-only: runs the REAL text-back pipeline with the console SMS provider (nothing is sent). */
@@ -180,7 +180,9 @@ export async function simulateMissedCallAction(input: unknown) {
   const { processCallEnded } = await import("@/lib/textback/service");
   const { localDateOf, localToUtc } = await import("@/lib/scheduling/time");
   const tz = ctx.salon.timezone;
-  const now = p.data.when === "tonight" ? localToUtc(localDateOf(new Date(), tz), 21 * 60 + 45, tz) : new Date();
+  const today = localDateOf(new Date(), tz);
+  const now =
+    p.data.when === "tonight" ? localToUtc(today, 21 * 60 + 45, tz) : p.data.when === "afternoon" ? localToUtc(today, 14 * 60, tz) : new Date();
   const r = await processCallEnded(
     ctx.store,
     ctx.salon,
@@ -215,4 +217,45 @@ export async function resolveCallbackAction(id: string, status: "done" | "dismis
   await ctx.store.resolveCallback(ctx.salon.id, id, status);
   revalidatePath("/app", "layout");
   return { ok: true };
+}
+
+// ---------------- Salon profile (Settings) ----------------
+export type ProfileResult = { ok: true; message: string } | { ok: false; error: string } | null;
+
+export async function saveSalonProfileAction(_prev: ProfileResult, form: FormData): Promise<ProfileResult> {
+  const ctx = await getStaffContext();
+  if (!["owner", "manager"].includes(ctx.role)) return { ok: false, error: "Only the owner or a manager can change the salon profile." };
+  const { salonProfileSchema, encodeProfile, DEMO_BRAND_COOKIE } = await import("@/lib/salon-profile");
+  const p = salonProfileSchema.safeParse({
+    name: form.get("name"),
+    ownerFirstName: form.get("ownerFirstName") ?? undefined,
+    ownerTitleVi: form.get("ownerTitleVi") ?? undefined,
+    phone: form.get("phone") ?? undefined,
+    address: form.get("address") ?? undefined,
+  });
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Please check the form." };
+
+  if (ctx.salon.isDemo && ctx.demo) {
+    const { cookies } = await import("next/headers");
+    (await cookies()).set(DEMO_BRAND_COOKIE, encodeProfile(p.data), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 180,
+    });
+  } else {
+    await ctx.store.updateSalonProfile(ctx.salon.id, p.data);
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Saved. Everything now shows “${p.data.name}”.` };
+}
+
+export async function resetDemoProfileAction(): Promise<ProfileResult> {
+  const ctx = await getStaffContext();
+  if (!ctx.demo) return { ok: false, error: "Only available in demo mode." };
+  const { DEMO_BRAND_COOKIE } = await import("@/lib/salon-profile");
+  (await (await import("next/headers")).cookies()).delete(DEMO_BRAND_COOKIE);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Back to the default demo salon." };
 }

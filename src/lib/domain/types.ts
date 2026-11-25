@@ -42,7 +42,7 @@ export interface SalonSettings {
   /** Local "HH:mm" window when no automated texts go out (wraps midnight). */
   quietHours: { start: string; end: string };
   missedCallTextBack: { enabled: boolean; dedupeHours: number; upcomingWindowDays: number };
-  /** Short public booking URL used in texts (e.g. https://book.tcutz-salon.com). Falls back to app URL + /book/slug. */
+  /** Short public booking URL used in texts (e.g. https://book.yoursalon.com). Falls back to app URL + /book/slug. */
   publicBookingUrl?: string;
 }
 
@@ -57,6 +57,8 @@ export interface Salon {
   isDemo: boolean;
   brand: { primary: string; accent: string; background: string };
   ownerFirstName?: string;
+  /** Vietnamese honorific used before the owner's name in texts, e.g. "chị" or "anh". */
+  ownerTitleVi?: string;
   /** Twilio (or other provider) number calls are forwarded to and texts are sent from. */
   providerNumber?: string;
   settings: SalonSettings;

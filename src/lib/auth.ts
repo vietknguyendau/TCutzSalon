@@ -17,7 +17,7 @@ export interface StaffContext {
 
 /**
  * Resolves the signed-in staff member and their salon.
- * Demo mode: acts as the Tcutz owner with synthetic data (clearly bannered in the UI).
+ * Demo mode: acts as the demo salon owner with synthetic data (clearly bannered in the UI).
  * Supabase mode: requires a session; salon comes from salon_memberships (RLS-protected).
  */
 export const getStaffContext = cache(async (): Promise<StaffContext> => {

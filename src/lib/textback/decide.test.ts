@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { classifyInbound, decideTextBack, quietHoursEnd, textBackBody, type DecisionInput } from "./decide";
-import { tcutzSalon } from "../data/fixtures";
+import { demoSalon } from "../data/fixtures";
 import { countSegments } from "../providers/segments";
 
 const TZ = "America/Chicago";
 const at = (iso: string) => new Date(iso);
 const base = (o: Partial<DecisionInput> = {}): DecisionInput => ({
-  salon: tcutzSalon,
-  bookingUrl: "https://book.tcutz-salon.com/?r=m",
+  salon: demoSalon,
+  bookingUrl: "https://book.example-salon.com/?r=m",
   from: "+17635550177",
   outcome: "missed",
   now: at("2026-12-07T19:00:00Z"), // Mon 1:00 PM CST
@@ -22,7 +22,7 @@ describe("decideTextBack", () => {
     const d = decideTextBack(base());
     expect(d.action).toBe("send");
     if (d.action === "send") {
-      expect(d.body).toContain("https://book.tcutz-salon.com/?r=m");
+      expect(d.body).toContain("https://book.example-salon.com/?r=m");
       expect(d.body).toContain("STOP");
       expect(d.template).toBe("missed_call_text_back");
     }
@@ -78,7 +78,7 @@ describe("decideTextBack", () => {
   });
 
   it("can be switched off per salon", () => {
-    const salon = { ...tcutzSalon, settings: { ...tcutzSalon.settings, missedCallTextBack: { enabled: false, dedupeHours: 12, upcomingWindowDays: 14 } } };
+    const salon = { ...demoSalon, settings: { ...demoSalon.settings, missedCallTextBack: { enabled: false, dedupeHours: 12, upcomingWindowDays: 14 } } };
     expect(decideTextBack(base({ salon }))).toMatchObject({ reason: "DISABLED" });
   });
 });
@@ -98,12 +98,12 @@ describe("quietHoursEnd", () => {
 
 describe("message length / cost", () => {
   it("English booking-link text fits in one SMS segment", () => {
-    const b = textBackBody({ salonName: "Tcutz Barber & Salon", timezone: TZ, lang: "en", link: "https://book.tcutz-salon.com/?r=m" });
+    const b = textBackBody({ salonName: "Main Street Barber & Salon", timezone: TZ, lang: "en", link: "https://book.example-salon.com/?r=m" });
     expect(b.length).toBeLessThanOrEqual(160);
     expect(countSegments(b)).toBe(1);
   });
   it("Vietnamese text stays within 2 segments (UCS-2)", () => {
-    const b = textBackBody({ salonName: "Tcutz Barber & Salon", timezone: TZ, lang: "vi", link: "https://book.tcutz-salon.com/?r=m&lang=vi" });
+    const b = textBackBody({ salonName: "Main Street Barber & Salon", timezone: TZ, lang: "vi", link: "https://book.example-salon.com/?r=m&lang=vi" });
     expect(countSegments(b)).toBeLessThanOrEqual(2);
   });
 });

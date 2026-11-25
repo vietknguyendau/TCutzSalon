@@ -69,7 +69,7 @@ export default async function AnalyticsPage() {
       </Card>
 
       <h2 className="mb-1 text-xl font-semibold">ROI calculator</h2>
-      <p className="mb-4 text-ink-600">Defaults are illustrative for Tcutz: $30 men&apos;s cut, 15% variable expense, $149/month.</p>
+      <p className="mb-4 text-ink-600">Illustrative defaults: $30 men&apos;s cut, 15% variable expense, $149/month.</p>
       <RoiCalculator />
       <p className="mt-6 text-sm text-ink-400">Baseline comparison (before vs. after launch) needs a recorded baseline period — planned for Phase 3.</p>
     </div>

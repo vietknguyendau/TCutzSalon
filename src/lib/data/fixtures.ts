@@ -1,4 +1,5 @@
-// Tcutz pilot configuration + SYNTHETIC demo data. No real customer information lives here.
+// Generic DEMO salon ("Main Street Barber & Salon") + SYNTHETIC data. Fictional business, owner and 555 numbers —
+// safe to show any prospect. Rename per prospect with DEMO_* env vars (see src/lib/data/demo-config.ts).
 // Used by the in-memory demo store and by scripts/generate-seed.ts (→ supabase/seed.sql).
 // Keep this file free of path-alias imports so Node can run it directly.
 
@@ -18,8 +19,8 @@ import type {
 export const fid = (group: number, n: number) =>
   `00000000-0000-4000-${(8000 + group).toString()}-${String(n).padStart(12, "0")}`;
 
-export const TCUTZ_ID = fid(1, 1);
-export const STAFF_DIEM = fid(2, 1);
+export const DEMO_SALON_ID = fid(1, 1);
+export const STAFF_OWNER = fid(2, 1);
 export const STAFF_SAMPLE = fid(2, 2);
 
 const SALON_HOURS: WeeklyHours = {
@@ -32,24 +33,23 @@ const SALON_HOURS: WeeklyHours = {
   6: [{ open: "10:00", close: "19:00" }],
 };
 
-export const tcutzSalon: Salon = {
-  id: TCUTZ_ID,
-  slug: "tcutz",
-  name: "Tcutz Barber & Salon",
+export const demoSalon: Salon = {
+  id: DEMO_SALON_ID,
+  slug: "demo",
+  name: "Main Street Barber & Salon",
   timezone: "America/Chicago",
-  phone: "+17633150044",
-  address: "9540 Noble Pkwy N, Minneapolis, MN 55443",
-  websiteUrl: "https://www.tcutz-salon.com/",
+  phone: "+16125550142", // 555-01xx numbers are reserved for fiction
+  address: "123 Main Street, Minneapolis, MN",
   isDemo: true,
   brand: { primary: "#1C1B1A", accent: "#C9A96E", background: "#F5F0E8" },
-  ownerFirstName: "Diem",
-  providerNumber: "+17635550100", // fictional demo number
+  ownerFirstName: "Alex",
+  providerNumber: "+16125550100", // fictional texting number
   settings: {
     slotIntervalMinutes: 15,
     minBookingNoticeMinutes: 60,
     maxAdvanceDays: 60,
     holdMinutes: 5,
-    businessHours: SALON_HOURS, // from tcutz-salon.com — confirm with owner
+    businessHours: SALON_HOURS, // typical barbershop hours
     closedDates: [],
     supportedLanguages: ["en", "vi"],
     defaultLanguage: "en",
@@ -75,9 +75,9 @@ const SVC: SvcSeed[] = [
   [12, "Eyebrow wax", "Wax lông mày", 16, "fixed", 15],
 ];
 
-export const tcutzServices: Service[] = SVC.map(([n, en, vi, dollars, type, minutes, opts]) => ({
+export const demoServices: Service[] = SVC.map(([n, en, vi, dollars, type, minutes, opts]) => ({
   id: fid(3, n),
-  salonId: TCUTZ_ID,
+  salonId: DEMO_SALON_ID,
   nameEn: en,
   nameVi: vi,
   priceCents: dollars * 100,
@@ -105,22 +105,22 @@ export const SVC_ID = {
   brow: fid(3, 12),
 };
 
-export const tcutzStaff: Staff[] = [
+export const demoStaff: Staff[] = [
   {
-    id: STAFF_DIEM,
-    salonId: TCUTZ_ID,
-    displayName: "Diem",
+    id: STAFF_OWNER,
+    salonId: DEMO_SALON_ID,
+    displayName: "Alex",
     color: "#C9A96E",
     isActive: true,
     isBookableOnline: true,
     sortOrder: 1,
     workingHours: SALON_HOURS,
-    services: tcutzServices.map((s) => ({ serviceId: s.id })),
+    services: demoServices.map((s) => ({ serviceId: s.id })),
   },
   {
     id: STAFF_SAMPLE,
-    salonId: TCUTZ_ID,
-    displayName: "Sample Stylist",
+    salonId: DEMO_SALON_ID,
+    displayName: "Jordan",
     color: "#7FA39B",
     isActive: true,
     isBookableOnline: true,
@@ -168,12 +168,12 @@ export function buildCustomers(today: string): Customer[] {
     firstVisit.setUTCDate(firstVisit.getUTCDate() - visits * 25);
     return {
       id: fid(4, n),
-      salonId: TCUTZ_ID,
+      salonId: DEMO_SALON_ID,
       firstName: first,
       lastName: last,
       phoneE164: `+1763555${suffix}`,
       preferredLanguage: lang,
-      preferredStaffId: STAFF_DIEM,
+      preferredStaffId: STAFF_OWNER,
       usualServiceId: usual,
       firstVisitAt: firstVisit.toISOString(),
       lastVisitAt: lastVisit.toISOString(),
@@ -212,12 +212,12 @@ export function buildHaircutHistory(today: string): HaircutHistoryEntry[] {
     return d.toISOString().slice(0, 10);
   };
   return [
-    { id: fid(5, 1), customerId: fid(4, 1), staffId: STAFF_DIEM, cutOn: back(12), snapshot: { style: "Low skin fade, textured crop", clipperGuard: "0 → 2, blend to 4", topLength: "1.5 in" }, customerFeedback: "Perfect, same next time.", photos: [], createdAt: `${back(12)}T18:00:00Z` },
-    { id: fid(5, 2), customerId: fid(4, 1), staffId: STAFF_DIEM, cutOn: back(40), snapshot: { style: "Mid fade, textured crop", clipperGuard: "1 → 3", topLength: "2 in" }, customerFeedback: "A little long on top.", photos: [], createdAt: `${back(40)}T18:00:00Z` },
-    { id: fid(5, 3), customerId: fid(4, 1), staffId: STAFF_DIEM, cutOn: back(70), snapshot: { style: "Mid fade, comb over", clipperGuard: "1 → 3", topLength: "2.5 in" }, photos: [], createdAt: `${back(70)}T18:00:00Z` },
-    { id: fid(5, 4), customerId: fid(4, 3), staffId: STAFF_DIEM, cutOn: back(21), snapshot: { style: "Classic side part", clipperGuard: "4", topLength: "2 in" }, photos: [], createdAt: `${back(21)}T16:00:00Z` },
-    { id: fid(5, 5), customerId: fid(4, 5), staffId: STAFF_DIEM, cutOn: back(14), snapshot: { style: "Mid drop fade + beard shape", clipperGuard: "1 → 3", beard: "1/2 in" }, photos: [], createdAt: `${back(14)}T20:00:00Z` },
-    { id: fid(5, 6), customerId: fid(4, 6), staffId: STAFF_DIEM, cutOn: back(42), snapshot: { style: "Bob", colorFormula: "6N + 6.3 (1:1), 20 vol, 35 min" }, customerFeedback: "Color lasted well.", photos: [], createdAt: `${back(42)}T19:00:00Z` },
+    { id: fid(5, 1), customerId: fid(4, 1), staffId: STAFF_OWNER, cutOn: back(12), snapshot: { style: "Low skin fade, textured crop", clipperGuard: "0 → 2, blend to 4", topLength: "1.5 in" }, customerFeedback: "Perfect, same next time.", photos: [], createdAt: `${back(12)}T18:00:00Z` },
+    { id: fid(5, 2), customerId: fid(4, 1), staffId: STAFF_OWNER, cutOn: back(40), snapshot: { style: "Mid fade, textured crop", clipperGuard: "1 → 3", topLength: "2 in" }, customerFeedback: "A little long on top.", photos: [], createdAt: `${back(40)}T18:00:00Z` },
+    { id: fid(5, 3), customerId: fid(4, 1), staffId: STAFF_OWNER, cutOn: back(70), snapshot: { style: "Mid fade, comb over", clipperGuard: "1 → 3", topLength: "2.5 in" }, photos: [], createdAt: `${back(70)}T18:00:00Z` },
+    { id: fid(5, 4), customerId: fid(4, 3), staffId: STAFF_OWNER, cutOn: back(21), snapshot: { style: "Classic side part", clipperGuard: "4", topLength: "2 in" }, photos: [], createdAt: `${back(21)}T16:00:00Z` },
+    { id: fid(5, 5), customerId: fid(4, 5), staffId: STAFF_OWNER, cutOn: back(14), snapshot: { style: "Mid drop fade + beard shape", clipperGuard: "1 → 3", beard: "1/2 in" }, photos: [], createdAt: `${back(14)}T20:00:00Z` },
+    { id: fid(5, 6), customerId: fid(4, 6), staffId: STAFF_OWNER, cutOn: back(42), snapshot: { style: "Bob", colorFormula: "6N + 6.3 (1:1), 20 vol, 35 min" }, customerFeedback: "Color lasted well.", photos: [], createdAt: `${back(42)}T19:00:00Z` },
   ];
 }
 
@@ -235,15 +235,15 @@ export interface DemoAppointmentSeed {
 }
 
 export const DEMO_APPOINTMENTS: DemoAppointmentSeed[] = [
-  { n: 1, dayOffset: 0, time: "10:00", staffId: STAFF_DIEM, customerN: 3, serviceIds: [SVC_ID.senior], status: "completed", source: "ai_phone" },
-  { n: 2, dayOffset: 0, time: "10:45", staffId: STAFF_DIEM, customerN: 1, serviceIds: [SVC_ID.mens], status: "completed", source: "rebooking" },
+  { n: 1, dayOffset: 0, time: "10:00", staffId: STAFF_OWNER, customerN: 3, serviceIds: [SVC_ID.senior], status: "completed", source: "ai_phone" },
+  { n: 2, dayOffset: 0, time: "10:45", staffId: STAFF_OWNER, customerN: 1, serviceIds: [SVC_ID.mens], status: "completed", source: "rebooking" },
   { n: 3, dayOffset: 0, time: "11:30", staffId: STAFF_SAMPLE, customerN: 2, serviceIds: [SVC_ID.child], status: "completed", source: "manual" },
-  { n: 4, dayOffset: 0, time: "13:00", staffId: STAFF_DIEM, customerN: 6, serviceIds: [SVC_ID.color], status: "in_progress", source: "manual", note: "Gray coverage" },
-  { n: 5, dayOffset: 0, time: "15:30", staffId: STAFF_DIEM, customerN: 5, serviceIds: [SVC_ID.mensBeard], status: "booked", source: "ai_phone" },
-  { n: 6, dayOffset: 0, time: "16:30", staffId: STAFF_DIEM, customerN: 9, serviceIds: [SVC_ID.mensShampoo], status: "confirmed", source: "website" },
+  { n: 4, dayOffset: 0, time: "13:00", staffId: STAFF_OWNER, customerN: 6, serviceIds: [SVC_ID.color], status: "in_progress", source: "manual", note: "Gray coverage" },
+  { n: 5, dayOffset: 0, time: "15:30", staffId: STAFF_OWNER, customerN: 5, serviceIds: [SVC_ID.mensBeard], status: "booked", source: "ai_phone" },
+  { n: 6, dayOffset: 0, time: "16:30", staffId: STAFF_OWNER, customerN: 9, serviceIds: [SVC_ID.mensShampoo], status: "confirmed", source: "website" },
   { n: 7, dayOffset: 0, time: "14:00", staffId: STAFF_SAMPLE, customerN: 8, serviceIds: [SVC_ID.mens], status: "booked", source: "ai_phone" },
-  { n: 8, dayOffset: 0, time: "17:15", staffId: STAFF_DIEM, customerN: 10, serviceIds: [SVC_ID.brow], status: "booked", source: "website" },
-  { n: 9, dayOffset: 1, time: "10:30", staffId: STAFF_DIEM, customerN: 4, serviceIds: [SVC_ID.womens], status: "booked", source: "website" },
-  { n: 10, dayOffset: 1, time: "12:00", staffId: STAFF_DIEM, customerN: 7, serviceIds: [SVC_ID.womens], status: "booked", source: "ai_phone" },
-  { n: 11, dayOffset: 2, time: "11:00", staffId: STAFF_DIEM, customerN: 3, serviceIds: [SVC_ID.senior], status: "booked", source: "rebooking" },
+  { n: 8, dayOffset: 0, time: "17:15", staffId: STAFF_OWNER, customerN: 10, serviceIds: [SVC_ID.brow], status: "booked", source: "website" },
+  { n: 9, dayOffset: 1, time: "10:30", staffId: STAFF_OWNER, customerN: 4, serviceIds: [SVC_ID.womens], status: "booked", source: "website" },
+  { n: 10, dayOffset: 1, time: "12:00", staffId: STAFF_OWNER, customerN: 7, serviceIds: [SVC_ID.womens], status: "booked", source: "ai_phone" },
+  { n: 11, dayOffset: 2, time: "11:00", staffId: STAFF_OWNER, customerN: 3, serviceIds: [SVC_ID.senior], status: "booked", source: "rebooking" },
 ];

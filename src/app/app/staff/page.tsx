@@ -33,7 +33,7 @@ export default async function StaffPage() {
           </Card>
         ))}
       </div>
-      <p className="mt-4 text-sm text-ink-400">“Sample Stylist” is placeholder data — real staff, hours and time-off editing come after the owner discovery session.</p>
+      <p className="mt-4 text-sm text-ink-400">Staff, hours and time-off editing in the app come after the owner discovery session.</p>
     </div>
   );
 }

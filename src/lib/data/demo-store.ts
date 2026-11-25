@@ -13,10 +13,17 @@ import {
   buildHaircutHistory,
   buildHaircutProfiles,
   fid,
-  tcutzSalon,
-  tcutzServices,
-  tcutzStaff,
+  demoSalon,
+  demoServices,
+  demoStaff,
 } from "./fixtures";
+import { applyDemoOverrides } from "./demo-config";
+import { brandSalon, brandStaff, readDemoBranding } from "./demo-branding";
+import { textBackBody } from "../textback/decide";
+
+/** Demo salon + staff after per-prospect DEMO_* overrides (env is read once per process). */
+let demoCache: ReturnType<typeof applyDemoOverrides> | null = null;
+const demo = () => (demoCache ??= applyDemoOverrides(demoSalon, demoStaff));
 import type { AppointmentPatch, CreateAppointmentInput, DataStore, NewCustomer, StoreResult, VerificationRecord } from "./store";
 
 interface DemoState {
@@ -36,12 +43,13 @@ interface DemoState {
 }
 
 function buildState(now = new Date()): DemoState {
-  const tz = tcutzSalon.timezone;
+  const { salon, staff: demoStaffList } = demo();
+  const tz = salon.timezone;
   const today = localDateOf(now, tz);
-  const svcById = new Map(tcutzServices.map((s) => [s.id, s]));
+  const svcById = new Map(demoServices.map((s) => [s.id, s]));
   const appointments: Appointment[] = DEMO_APPOINTMENTS.map((a) => {
     const lines = a.serviceIds.map((id) => svcById.get(id)!);
-    const staff = tcutzStaff.find((s) => s.id === a.staffId)!;
+    const staff = demoStaffList.find((s) => s.id === a.staffId)!;
     const duration = lines.reduce(
       (sum, s) => sum + (staff.services.find((l) => l.serviceId === s.id)?.durationOverrideMinutes ?? s.durationMinutes),
       0,
@@ -52,7 +60,7 @@ function buildState(now = new Date()): DemoState {
     const price = lines.reduce((s, l) => s + l.priceCents, 0);
     return {
       id: fid(6, a.n),
-      salonId: tcutzSalon.id,
+      salonId: salon.id,
       customerId: a.customerN ? fid(4, a.customerN) : undefined,
       staffId: a.staffId,
       startsAt: start.toISOString(),
@@ -71,14 +79,14 @@ function buildState(now = new Date()): DemoState {
   // A little realistic Phase-2 history for today: one missed call that got a text, one landline call-back.
   const at = (hhmm: string) => localToUtc(today, hhmmToMinutes(hhmm), tz).toISOString();
   const calls: CallLog[] = [
-    { id: randomUUID(), salonId: tcutzSalon.id, provider: "demo", externalCallId: "demo-call-1", fromE164: "+17635550166", language: "en", startedAt: at("10:12"), endedAt: at("10:12"), durationSeconds: 18, outcome: "missed", createdAt: at("10:12") },
-    { id: randomUUID(), salonId: tcutzSalon.id, provider: "demo", externalCallId: "demo-call-2", fromE164: "+17635550102", language: "en", startedAt: at("11:05"), endedAt: at("11:06"), durationSeconds: 22, outcome: "missed", createdAt: at("11:05") },
+    { id: randomUUID(), salonId: salon.id, provider: "demo", externalCallId: "demo-call-1", fromE164: "+17635550166", language: "en", startedAt: at("10:12"), endedAt: at("10:12"), durationSeconds: 18, outcome: "missed", createdAt: at("10:12") },
+    { id: randomUUID(), salonId: salon.id, provider: "demo", externalCallId: "demo-call-2", fromE164: "+17635550102", language: "en", startedAt: at("11:05"), endedAt: at("11:06"), durationSeconds: 22, outcome: "missed", createdAt: at("11:05") },
   ];
   const notifications: NotificationRecord[] = [
-    { id: randomUUID(), salonId: tcutzSalon.id, channel: "sms", category: "transactional", template: "missed_call_text_back", toAddress: "+17635550166", body: "Tcutz: Sorry we missed your call! Book here: https://book.tcutz-salon.com/?r=m or reply CALL for a call back. Reply STOP to opt out.", status: "test_mode", provider: "console", scheduledFor: at("10:12"), sentAt: at("10:12"), segments: 1, createdAt: at("10:12") },
+    { id: randomUUID(), salonId: salon.id, channel: "sms", category: "transactional", template: "missed_call_text_back", toAddress: "+17635550166", body: textBackBody({ salonName: salon.name, timezone: tz, lang: "en", link: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/book/${salon.slug}?r=m` }), status: "test_mode", provider: "console", scheduledFor: at("10:12"), sentAt: at("10:12"), segments: 1, createdAt: at("10:12") },
   ];
   const callbacks: CallbackRequest[] = [
-    { id: randomUUID(), salonId: tcutzSalon.id, customerId: fid(4, 3), phoneE164: "+17635550102", name: "Robert Anderson", reason: "landline_missed_call", language: "en", status: "open", createdAt: at("11:06") },
+    { id: randomUUID(), salonId: salon.id, customerId: fid(4, 3), phoneE164: "+17635550102", name: "Robert Anderson", reason: "landline_missed_call", language: "en", status: "open", createdAt: at("11:06") },
   ];
   return {
     notifications,
@@ -86,9 +94,9 @@ function buildState(now = new Date()): DemoState {
     callbacks,
     optOuts: new Map(),
     webhookEvents: new Set(),
-    salons: [tcutzSalon],
-    services: structuredClone(tcutzServices),
-    staff: structuredClone(tcutzStaff),
+    salons: [salon],
+    services: structuredClone(demoServices),
+    staff: structuredClone(demoStaffList),
     customers: buildCustomers(today),
     profiles: buildHaircutProfiles(today),
     history: buildHaircutHistory(today),
@@ -99,14 +107,14 @@ function buildState(now = new Date()): DemoState {
 
 const g = globalThis as unknown as { __demoState?: { state: DemoState; day: string; pinned: boolean } };
 function state(): DemoState {
-  const day = localDateOf(new Date(), tcutzSalon.timezone);
+  const day = localDateOf(new Date(), demo().salon.timezone);
   // Rebuild each new local day so "today" always has sample appointments (unless a test pinned the date).
   if (!g.__demoState || (!g.__demoState.pinned && g.__demoState.day !== day)) g.__demoState = { state: buildState(), day, pinned: false };
   return g.__demoState.state;
 }
 /** Tests: pass `now` to pin the demo calendar to that date. */
 export function resetDemoState(now?: Date) {
-  g.__demoState = { state: buildState(now), day: localDateOf(now ?? new Date(), tcutzSalon.timezone), pinned: !!now };
+  g.__demoState = { state: buildState(now), day: localDateOf(now ?? new Date(), demo().salon.timezone), pinned: !!now };
 }
 
 const clone = <T>(v: T): T => structuredClone(v);
@@ -120,17 +128,25 @@ function busyFor(s: DemoState, salonId: string, excludeId?: string): BusyBlock[]
 export class DemoStore implements DataStore {
   readonly mode = "demo" as const;
 
+  // Name/owner/phone/address come from this browser's demo branding when set (Settings → Salon profile).
   async getSalonBySlug(slug: string) {
-    return clone(state().salons.find((x) => x.slug === slug) ?? null);
+    const s = state().salons.find((x) => x.slug === slug);
+    return s ? brandSalon(clone(s), await readDemoBranding()) : null;
   }
   async getSalonById(id: string) {
-    return clone(state().salons.find((x) => x.id === id) ?? null);
+    const s = state().salons.find((x) => x.id === id);
+    return s ? brandSalon(clone(s), await readDemoBranding()) : null;
   }
   async listServices(salonId: string) {
     return clone(state().services.filter((x) => x.salonId === salonId).sort((a, b) => a.sortOrder - b.sortOrder));
   }
   async listStaff(salonId: string) {
-    return clone(state().staff.filter((x) => x.salonId === salonId).sort((a, b) => a.sortOrder - b.sortOrder));
+    const list = clone(state().staff.filter((x) => x.salonId === salonId).sort((a, b) => a.sortOrder - b.sortOrder));
+    return brandStaff(list, await readDemoBranding());
+  }
+  /** Demo salons are branded per browser (cookie) instead — see saveSalonProfileAction. */
+  async updateSalonProfile(): Promise<void> {
+    throw new Error("Demo salon profile is stored in the browser, not the store");
   }
   async listBusy(salonId: string, from: Date, to: Date) {
     return busyFor(state(), salonId).filter((b) => b.start < to && b.end > from);
@@ -330,7 +346,7 @@ export class DemoStore implements DataStore {
     if (!c) return { ok: false, code: "NOT_FOUND" };
     if (!c.photoConsent) return { ok: false, code: "INVALID_CUSTOMER" };
     let entry = s.history.filter((h) => h.customerId === customerId).sort((a, b) => b.cutOn.localeCompare(a.cutOn))[0];
-    const today = localDateOf(new Date(), tcutzSalon.timezone);
+    const today = localDateOf(new Date(), demo().salon.timezone);
     if (!entry || entry.cutOn !== today) {
       const profile = s.profiles.find((p) => p.customerId === customerId);
       const { customerId: _c, updatedAt: _u, ...snapshot } = profile ?? { customerId, updatedAt: "" };
