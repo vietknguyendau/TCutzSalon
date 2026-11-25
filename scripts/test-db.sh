@@ -14,6 +14,14 @@ for f in supabase/migrations/*.sql; do echo "→ $f"; $PSQL -d "$DB" -f "$f"; do
 echo "→ supabase/seed.sql"; $PSQL -d "$DB" -f supabase/seed.sql
 $PSQL -d "$DB" -f supabase/tests/rls_and_booking_test.sql
 
+echo "→ supabase/tenants/new_salon.sql (template creates a real tenant)"
+$PSQL -d "$DB" -c "insert into auth.users (id, email) values ('dddddddd-0000-4000-8000-000000000004', 'owner@example.com')"
+$PSQL -d "$DB" -f supabase/tenants/new_salon.sql
+OK=$($PSQL -d "$DB" -tAc "select count(*) from salons s join salon_memberships m on m.salon_id = s.id and m.role = 'owner'
+  join staff_services ss on ss.salon_id = s.id where s.slug = 'yoursalon' and not s.is_demo")
+[ "$OK" -ge 6 ] || { echo "FAIL: tenant template"; exit 1; }
+echo "PASS: tenant template"
+
 echo "→ concurrency race: 8 parallel clients book the same slot"
 SLOT="date_trunc('hour', now()) + interval '20 days'"
 for i in $(seq 1 8); do
